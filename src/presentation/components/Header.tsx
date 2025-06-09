@@ -128,7 +128,15 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <>
-      <AppBar position="static" sx={{ minHeight: 'auto' }}>
+      <AppBar 
+        position="static" 
+        sx={{ 
+          minHeight: 'auto',
+          backgroundColor: '#ffffff',
+          color: '#333333',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24)'
+        }}
+      >
         <Toolbar 
           sx={{ 
             minHeight: '56px !important',
@@ -144,15 +152,15 @@ export const Header: React.FC<HeaderProps> = ({
             sx={{
               minHeight: '56px',
               '& .MuiTab-root': {
-                color: 'rgba(255, 255, 255, 0.7)',
+                color: '#666666',
                 minHeight: '56px',
                 paddingX: 3,
                 '&.Mui-selected': {
-                  color: 'white'
+                  color: '#1976d2'
                 }
               },
               '& .MuiTabs-indicator': {
-                backgroundColor: 'white'
+                backgroundColor: '#1976d2'
               }
             }}
           >
@@ -167,7 +175,7 @@ export const Header: React.FC<HeaderProps> = ({
                 label={connectedDevice.model !== 'Unknown' ? connectedDevice.model : connectedDevice.serialNumber}
                 size="small"
                 sx={{
-                  backgroundColor: 'rgba(76, 175, 80, 0.8)',
+                  backgroundColor: '#4caf50',
                   color: 'white',
                   '& .MuiChip-icon': {
                     color: 'white !important'
@@ -177,18 +185,18 @@ export const Header: React.FC<HeaderProps> = ({
             )}
             
             <Button
-              color="inherit"
               onClick={handleScanDevices}
               disabled={loading}
-              startIcon={loading ? <CircularProgress size={20} color="inherit" /> : <PhoneAndroid />}
+              startIcon={loading ? <CircularProgress size={20} color="primary" /> : <PhoneAndroid />}
               variant="outlined"
               size="small"
               sx={{ 
-                borderColor: 'rgba(255, 255, 255, 0.3)',
+                borderColor: '#1976d2',
+                color: '#1976d2',
                 height: '36px',
                 '&:hover': {
-                  borderColor: 'rgba(255, 255, 255, 0.5)',
-                  backgroundColor: 'rgba(255, 255, 255, 0.1)'
+                  borderColor: '#1565c0',
+                  backgroundColor: 'rgba(25, 118, 210, 0.04)'
                 }
               }}
             >
