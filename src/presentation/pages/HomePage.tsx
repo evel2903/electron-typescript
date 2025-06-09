@@ -1,16 +1,19 @@
-// src/presentation/pages/HomePage.tsx
+// src/presentation/pages/HomePage.tsx - Updated to include Android device functionality
 import React, { useState, useEffect } from 'react';
-import { Container, Typography, Box } from '@mui/material';
+import { Container, Typography, Box, Alert } from '@mui/material';
 import { WelcomeCard } from '../components/WelcomeCard';
 import { SystemInfoCard } from '../components/SystemInfoCard';
+import { AndroidDeviceCard } from '../components/AndroidDeviceCard';
 import { DIContainer } from '@/application/services/DIContainer';
 import { ElectronAPIService } from '@/infrastructure/services/ElectronAPIService';
+import { AndroidDevice } from '@/domain/entities/AndroidDevice';
 
 export const HomePage: React.FC = () => {
   const [welcomeMessage, setWelcomeMessage] = useState<string>('');
   const [appInfo, setAppInfo] = useState<any>(null);
   const [systemInfo, setSystemInfo] = useState<any>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const [selectedDevice, setSelectedDevice] = useState<AndroidDevice | null>(null);
 
   useEffect(() => {
     const loadData = async () => {
@@ -37,6 +40,10 @@ export const HomePage: React.FC = () => {
     loadData();
   }, []);
 
+  const handleDeviceSelected = (device: AndroidDevice) => {
+    setSelectedDevice(device);
+  };
+
   return (
     <Container maxWidth="md">
       <Box py={4}>
@@ -48,6 +55,15 @@ export const HomePage: React.FC = () => {
         </Typography>
         
         <WelcomeCard message={welcomeMessage} loading={loading} />
+        
+        <AndroidDeviceCard onDeviceSelected={handleDeviceSelected} />
+        
+        {selectedDevice && (
+          <Alert severity="success" sx={{ maxWidth: 600, mx: 'auto', mb: 3 }}>
+            Successfully connected to {selectedDevice.model} ({selectedDevice.serialNumber})
+          </Alert>
+        )}
+        
         <SystemInfoCard 
           appInfo={appInfo} 
           systemInfo={systemInfo} 
