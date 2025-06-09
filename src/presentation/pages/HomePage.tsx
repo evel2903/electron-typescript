@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Box } from '@mui/material';
 import { Header } from '../components/Header';
-import { Tab1Page } from './Tab1Page';
+import { ImportPage } from './ImportPage';
 import { Tab2Page } from './Tab2Page';
 import { DIContainer } from '@/application/services/DIContainer';
 import { ElectronAPIService } from '@/infrastructure/services/ElectronAPIService';
@@ -23,11 +23,11 @@ export const HomePage: React.FC = () => {
   const renderCurrentPage = () => {
     switch (currentTab) {
       case 0:
-        return <Tab1Page />;
+        return <ImportPage />;
       case 1:
         return <Tab2Page />;
       default:
-        return <Tab1Page />;
+        return <ImportPage />;
     }
   };
 
