@@ -3,7 +3,6 @@ import React, { useState } from 'react';
 import {
   AppBar,
   Toolbar,
-  Typography,
   Box,
   Tabs,
   Tab,
@@ -19,7 +18,8 @@ import {
   Alert,
   IconButton,
   Chip,
-  CircularProgress
+  CircularProgress,
+  Typography
 } from '@mui/material';
 import { 
   PhoneAndroid, 
@@ -35,12 +35,14 @@ interface HeaderProps {
   currentTab: number;
   onTabChange: (newValue: number) => void;
   onDeviceSelected?: (device: AndroidDevice) => void;
+  connectedDevice?: AndroidDevice | null;
 }
 
 export const Header: React.FC<HeaderProps> = ({ 
   currentTab, 
   onTabChange, 
-  onDeviceSelected 
+  onDeviceSelected,
+  connectedDevice
 }) => {
   const [devices, setDevices] = useState<AndroidDevice[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
@@ -126,37 +128,25 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <>
-      <AppBar position="static">
-        <Toolbar>
-          <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-            Clean Architecture Demo
-          </Typography>
-          
-          <Button
-            color="inherit"
-            onClick={handleScanDevices}
-            disabled={loading}
-            startIcon={loading ? <CircularProgress size={20} color="inherit" /> : <PhoneAndroid />}
-            variant="outlined"
-            sx={{ 
-              borderColor: 'rgba(255, 255, 255, 0.3)',
-              '&:hover': {
-                borderColor: 'rgba(255, 255, 255, 0.5)',
-                backgroundColor: 'rgba(255, 255, 255, 0.1)'
-              }
-            }}
-          >
-            {loading ? 'Scanning...' : 'Connect Device'}
-          </Button>
-        </Toolbar>
-        
-        <Box sx={{ borderBottom: 1, borderColor: 'rgba(255, 255, 255, 0.2)' }}>
+      <AppBar position="static" sx={{ minHeight: 'auto' }}>
+        <Toolbar 
+          sx={{ 
+            minHeight: '56px !important',
+            height: '56px',
+            paddingY: 0,
+            justifyContent: 'space-between',
+            alignItems: 'center'
+          }}
+        >
           <Tabs 
             value={currentTab} 
             onChange={handleTabChange}
             sx={{
+              minHeight: '56px',
               '& .MuiTab-root': {
                 color: 'rgba(255, 255, 255, 0.7)',
+                minHeight: '56px',
+                paddingX: 3,
                 '&.Mui-selected': {
                   color: 'white'
                 }
@@ -169,7 +159,43 @@ export const Header: React.FC<HeaderProps> = ({
             <Tab label="Tab 1" />
             <Tab label="Tab 2" />
           </Tabs>
-        </Box>
+          
+          <Box display="flex" alignItems="center" gap={2}>
+            {connectedDevice && (
+              <Chip
+                icon={<CheckCircle sx={{ color: 'white !important' }} />}
+                label={connectedDevice.model !== 'Unknown' ? connectedDevice.model : connectedDevice.serialNumber}
+                size="small"
+                sx={{
+                  backgroundColor: 'rgba(76, 175, 80, 0.8)',
+                  color: 'white',
+                  '& .MuiChip-icon': {
+                    color: 'white !important'
+                  }
+                }}
+              />
+            )}
+            
+            <Button
+              color="inherit"
+              onClick={handleScanDevices}
+              disabled={loading}
+              startIcon={loading ? <CircularProgress size={20} color="inherit" /> : <PhoneAndroid />}
+              variant="outlined"
+              size="small"
+              sx={{ 
+                borderColor: 'rgba(255, 255, 255, 0.3)',
+                height: '36px',
+                '&:hover': {
+                  borderColor: 'rgba(255, 255, 255, 0.5)',
+                  backgroundColor: 'rgba(255, 255, 255, 0.1)'
+                }
+              }}
+            >
+              {loading ? 'Scanning...' : connectedDevice ? 'Reconnect Device' : 'Connect Device'}
+            </Button>
+          </Box>
+        </Toolbar>
       </AppBar>
 
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="sm" fullWidth>
