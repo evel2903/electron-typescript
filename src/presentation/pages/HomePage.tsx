@@ -1,75 +1,53 @@
-// src/presentation/pages/HomePage.tsx - Updated to include Android device functionality
+// src/presentation/pages/HomePage.tsx
 import React, { useState, useEffect } from 'react';
-import { Container, Typography, Box, Alert } from '@mui/material';
-import { WelcomeCard } from '../components/WelcomeCard';
-import { SystemInfoCard } from '../components/SystemInfoCard';
-import { AndroidDeviceCard } from '../components/AndroidDeviceCard';
+import { Box, Alert } from '@mui/material';
+import { Header } from '../components/Header';
+import { Tab1Page } from './Tab1Page';
+import { Tab2Page } from './Tab2Page';
 import { DIContainer } from '@/application/services/DIContainer';
 import { ElectronAPIService } from '@/infrastructure/services/ElectronAPIService';
 import { AndroidDevice } from '@/domain/entities/AndroidDevice';
 
 export const HomePage: React.FC = () => {
-  const [welcomeMessage, setWelcomeMessage] = useState<string>('');
-  const [appInfo, setAppInfo] = useState<any>(null);
-  const [systemInfo, setSystemInfo] = useState<any>(null);
-  const [loading, setLoading] = useState<boolean>(true);
   const [selectedDevice, setSelectedDevice] = useState<AndroidDevice | null>(null);
-
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        const electronAPI = new ElectronAPIService();
-        const appService = DIContainer.getInstance().getAppService(electronAPI);
-        
-        const [message, information] = await Promise.all([
-          appService.getWelcomeMessage(),
-          appService.getAppInformation()
-        ]);
-
-        setWelcomeMessage(message);
-        setAppInfo(information.appInfo);
-        setSystemInfo(information.systemInfo);
-      } catch (error) {
-        console.error('Failed to load application data:', error);
-        setWelcomeMessage('Hello, World! Welcome to our Clean Architecture Electron App.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadData();
-  }, []);
+  const [currentTab, setCurrentTab] = useState<number>(0);
 
   const handleDeviceSelected = (device: AndroidDevice) => {
     setSelectedDevice(device);
   };
 
+  const handleTabChange = (newValue: number) => {
+    setCurrentTab(newValue);
+  };
+
+  const renderCurrentPage = () => {
+    switch (currentTab) {
+      case 0:
+        return <Tab1Page />;
+      case 1:
+        return <Tab2Page />;
+      default:
+        return <Tab1Page />;
+    }
+  };
+
   return (
-    <Container maxWidth="md">
-      <Box py={4}>
-        <Typography variant="h1" component="h1" align="center" gutterBottom>
-          Clean Architecture Demo
-        </Typography>
-        <Typography variant="body1" align="center" color="text.secondary" paragraph>
-          This application demonstrates Clean Architecture principles in an Electron environment using TypeScript and Material-UI.
-        </Typography>
-        
-        <WelcomeCard message={welcomeMessage} loading={loading} />
-        
-        <AndroidDeviceCard onDeviceSelected={handleDeviceSelected} />
-        
+    <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+      <Header 
+        currentTab={currentTab} 
+        onTabChange={handleTabChange}
+        onDeviceSelected={handleDeviceSelected}
+      />
+      
+      <Box sx={{ flexGrow: 1 }}>
         {selectedDevice && (
-          <Alert severity="success" sx={{ maxWidth: 600, mx: 'auto', mb: 3 }}>
+          <Alert severity="success" sx={{ mx: 2, mt: 2 }}>
             Successfully connected to {selectedDevice.model} ({selectedDevice.serialNumber})
           </Alert>
         )}
         
-        <SystemInfoCard 
-          appInfo={appInfo} 
-          systemInfo={systemInfo} 
-          loading={loading} 
-        />
+        {renderCurrentPage()}
       </Box>
-    </Container>
+    </Box>
   );
 };
