@@ -13,22 +13,78 @@ export class AdbService {
   private adbPath: string;
 
   constructor() {
-    // Default ADB path - can be configured based on system
-    this.adbPath = 'adb';
+    this.adbPath = this.resolveAdbPath();
+    console.log(`ADB Service initialized with path: ${this.adbPath}`);
+  }
+
+  private resolveAdbPath(): string {
+    const isDev = process.env.NODE_ENV === 'development';
+    console.log(`Environment: ${isDev ? 'development' : 'production'}`);
+    console.log(`Current __dirname: ${__dirname}`);
+    
+    let basePath: string;
+    
+    if (isDev) {
+      // In development, we need to go up from dist/infrastructure/services/ to project root
+      basePath = path.join(__dirname, '../');
+    } else {
+      // In production, use the application directory
+      basePath = path.dirname(process.execPath);
+    }
+    
+    console.log(`Base path resolved to: ${basePath}`);
+    
+    // Construct the platform-tools path
+    const platformToolsPath = path.join(basePath, 'tools', 'platform-tools');
+    console.log(`Platform tools path: ${platformToolsPath}`);
+    
+    // Determine the correct executable name for the platform
+    const adbExecutable = process.platform === 'win32' ? 'adb.exe' : 'adb';
+    const fullAdbPath = path.join(platformToolsPath, adbExecutable);
+    
+    console.log(`Full ADB path: ${fullAdbPath}`);
+    
+    // Verify that the directory and file exist
+    if (!fs.existsSync(platformToolsPath)) {
+      console.error(`Platform tools directory does not exist: ${platformToolsPath}`);
+      console.log('Please ensure you have extracted platform-tools to the tools/ directory in your project root.');
+    }
+    
+    if (!fs.existsSync(fullAdbPath)) {
+      console.error(`ADB executable does not exist: ${fullAdbPath}`);
+      console.log('Available files in platform-tools directory:');
+      try {
+        const files = fs.readdirSync(platformToolsPath);
+        files.forEach(file => console.log(`  - ${file}`));
+      } catch (error) {
+        console.log('Could not read platform-tools directory');
+      }
+    }
+    
+    return fullAdbPath;
   }
 
   async isAdbAvailable(): Promise<boolean> {
     try {
-      await execAsync(`${this.adbPath} version`);
+      // Check if the bundled ADB file exists
+      if (!fs.existsSync(this.adbPath)) {
+        console.error(`ADB executable not found at: ${this.adbPath}`);
+        return false;
+      }
+      
+      // Test ADB execution
+      const { stdout } = await execAsync(`"${this.adbPath}" version`);
+      console.log(`ADB version check successful: ${stdout.trim()}`);
       return true;
     } catch (error) {
+      console.error('ADB version check failed:', error);
       return false;
     }
   }
 
   async listDevices(): Promise<AndroidDevice[]> {
     try {
-      const { stdout } = await execAsync(`${this.adbPath} devices -l`);
+      const { stdout } = await execAsync(`"${this.adbPath}" devices -l`);
       const lines = stdout.split('\n').filter(line => line.trim() && !line.includes('List of devices'));
       
       const devices: AndroidDevice[] = [];
@@ -55,7 +111,7 @@ export class AdbService {
   async authorizeDevice(deviceId: string): Promise<boolean> {
     try {
       // Wait for device authorization - this typically requires user interaction on the device
-      const { stdout } = await execAsync(`${this.adbPath} -s ${deviceId} wait-for-device`);
+      await execAsync(`"${this.adbPath}" -s ${deviceId} wait-for-device`);
       return true;
     } catch (error) {
       console.error('Error authorizing device:', error);
@@ -65,7 +121,7 @@ export class AdbService {
 
   async listFiles(deviceId: string, path: string): Promise<DeviceFile[]> {
     try {
-      const { stdout } = await execAsync(`${this.adbPath} -s ${deviceId} shell ls -la "${path}"`);
+      const { stdout } = await execAsync(`"${this.adbPath}" -s ${deviceId} shell ls -la "${path}"`);
       return this.parseFileList(stdout);
     } catch (error) {
       console.error('Error listing files:', error);
@@ -76,7 +132,7 @@ export class AdbService {
   async pullFile(deviceId: string, remotePath: string, localPath: string): Promise<FileTransferResult> {
     try {
       const startTime = Date.now();
-      await execAsync(`${this.adbPath} -s ${deviceId} pull "${remotePath}" "${localPath}"`);
+      await execAsync(`"${this.adbPath}" -s ${deviceId} pull "${remotePath}" "${localPath}"`);
       
       const stats = fs.statSync(localPath);
       const transferTime = Date.now() - startTime;
@@ -100,7 +156,7 @@ export class AdbService {
       const stats = fs.statSync(localPath);
       const startTime = Date.now();
       
-      await execAsync(`${this.adbPath} -s ${deviceId} push "${localPath}" "${remotePath}"`);
+      await execAsync(`"${this.adbPath}" -s ${deviceId} push "${localPath}" "${remotePath}"`);
       
       const transferTime = Date.now() - startTime;
       
@@ -120,7 +176,7 @@ export class AdbService {
 
   async createDirectory(deviceId: string, path: string): Promise<boolean> {
     try {
-      await execAsync(`${this.adbPath} -s ${deviceId} shell mkdir -p "${path}"`);
+      await execAsync(`"${this.adbPath}" -s ${deviceId} shell mkdir -p "${path}"`);
       return true;
     } catch (error) {
       console.error('Error creating directory:', error);
@@ -130,7 +186,7 @@ export class AdbService {
 
   async deleteFile(deviceId: string, path: string): Promise<boolean> {
     try {
-      await execAsync(`${this.adbPath} -s ${deviceId} shell rm -rf "${path}"`);
+      await execAsync(`"${this.adbPath}" -s ${deviceId} shell rm -rf "${path}"`);
       return true;
     } catch (error) {
       console.error('Error deleting file:', error);

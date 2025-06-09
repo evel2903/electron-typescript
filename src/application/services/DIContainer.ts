@@ -1,10 +1,9 @@
-// src/application/services/DIContainer.ts - Updated to include Android services
+// src/application/services/DIContainer.ts - Updated for IPC architecture
 import { AppService } from './AppService';
 import { AndroidDeviceService } from './AndroidDeviceService';
 import { UserRepository } from '@/infrastructure/repositories/UserRepository';
 import { AppInfoRepository } from '@/infrastructure/repositories/AppInfoRepository';
 import { AndroidDeviceRepository } from '@/infrastructure/repositories/AndroidDeviceRepository';
-import { AdbService } from '@/infrastructure/services/AdbService';
 import { IElectronAPI } from '../interfaces/IElectronAPI';
 
 export class DIContainer {
@@ -32,8 +31,8 @@ export class DIContainer {
 
   getAndroidDeviceService(): AndroidDeviceService {
     if (!this.androidDeviceService) {
-      const adbService = new AdbService();
-      const androidDeviceRepository = new AndroidDeviceRepository(adbService);
+      // AndroidDeviceRepository now uses IPC instead of direct AdbService
+      const androidDeviceRepository = new AndroidDeviceRepository();
       this.androidDeviceService = new AndroidDeviceService(androidDeviceRepository);
     }
     return this.androidDeviceService;

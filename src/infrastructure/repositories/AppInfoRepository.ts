@@ -11,7 +11,7 @@ export class AppInfoRepository implements IAppInfoRepository {
       name: 'Clean Architecture Electron App',
       version: '1.0.0',
       description: 'A demonstration of Clean Architecture principles in an Electron application',
-      environment: process.env.NODE_ENV === 'production' ? 'production' : 'development'
+      environment: this.getEnvironment()
     };
   }
 
@@ -20,6 +20,7 @@ export class AppInfoRepository implements IAppInfoRepository {
     chromeVersion: string;
     electronVersion: string;
   }> {
+    // Always use the electronAPI for system information
     if (this.electronAPI) {
       const versions = this.electronAPI.getVersions();
       return {
@@ -29,11 +30,32 @@ export class AppInfoRepository implements IAppInfoRepository {
       };
     }
 
-    // Fallback for when electron API is not available
+    // Direct access to window.electronAPI as fallback
+    if (window.electronAPI && window.electronAPI.getVersions) {
+      const versions = window.electronAPI.getVersions();
+      return {
+        nodeVersion: versions.node,
+        chromeVersion: versions.chrome,
+        electronVersion: versions.electron
+      };
+    }
+
+    // Final fallback with unknown values
     return {
-      nodeVersion: process.versions.node || 'Unknown',
-      chromeVersion: process.versions.chrome || 'Unknown',
-      electronVersion: process.versions.electron || 'Unknown'
+      nodeVersion: 'Unknown',
+      chromeVersion: 'Unknown',
+      electronVersion: 'Unknown'
     };
+  }
+
+  private getEnvironment(): 'development' | 'production' {
+    // Check if we're in development mode based on available APIs
+    if (window.electronAPI) {
+      // In development, we typically have full API access
+      return 'development';
+    }
+    
+    // Default to production for safety
+    return 'production';
   }
 }
