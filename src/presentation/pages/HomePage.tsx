@@ -38,13 +38,13 @@ export const HomePage: React.FC = () => {
   const renderCurrentPage = () => {
     switch (currentTab) {
       case 0:
-        return <ImportPage />;
+        return <ImportPage connectedDevice={selectedDevice} />;
       case 1:
         return <Tab2Page />;
       case 2:
         return <SettingsPage />;
       default:
-        return <ImportPage />;
+        return <ImportPage connectedDevice={selectedDevice} />;
     }
   };
 

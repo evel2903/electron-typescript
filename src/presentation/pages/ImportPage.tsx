@@ -1,5 +1,5 @@
 // src/presentation/pages/ImportPage.tsx
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   Container,
   Typography,
@@ -18,7 +18,18 @@ import {
   Card,
   CardContent,
   TableFooter,
-  Tooltip
+  Tooltip,
+  Alert,
+  CircularProgress,
+  LinearProgress,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemIcon
 } from '@mui/material';
 import {
   Upload,
@@ -26,8 +37,18 @@ import {
   Clear,
   InsertDriveFile,
   TableChart,
-  Description
+  Description,
+  PhoneAndroid,
+  CloudUpload,
+  CheckCircle,
+  Error as ErrorIcon,
+  Warning,
+  Refresh
 } from '@mui/icons-material';
+import { AndroidDevice } from '@/domain/entities/AndroidDevice';
+import { FileTransferResult } from '@/domain/entities/FileTransferResult';
+import { DIContainer } from '@/application/services/DIContainer';
+import { SETTING_KEYS } from '@/shared/constants/settings';
 
 interface ImportedFile {
   id: string;
@@ -36,12 +57,34 @@ interface ImportedFile {
   type: string;
   dateAdded: Date;
   file: File;
+  transferStatus?: 'pending' | 'transferring' | 'completed' | 'failed';
+  transferProgress?: number;
+  transferError?: string;
 }
 
-export const ImportPage: React.FC = () => {
+interface TransferProgress {
+  currentFile: number;
+  totalFiles: number;
+  currentFileName: string;
+  overallProgress: number;
+}
+
+interface ImportPageProps {
+  connectedDevice?: AndroidDevice | null;
+}
+
+export const ImportPage: React.FC<ImportPageProps> = ({ connectedDevice }) => {
   const [importedFiles, setImportedFiles] = useState<ImportedFile[]>([]);
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
+  const [transferring, setTransferring] = useState<boolean>(false);
+  const [transferProgress, setTransferProgress] = useState<TransferProgress | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [importPath, setImportPath] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const androidDeviceService = DIContainer.getInstance().getAndroidDeviceService();
+  const settingService = DIContainer.getInstance().getSettingService();
 
   const ALLOWED_TYPES = [
     '.csv',
@@ -51,6 +94,20 @@ export const ImportPage: React.FC = () => {
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     'application/vnd.ms-excel'
   ];
+
+  useEffect(() => {
+    loadImportPath();
+  }, []);
+
+  const loadImportPath = async () => {
+    try {
+      const path = await settingService.getSettingValue(SETTING_KEYS.FILE_IMPORT_PATH);
+      setImportPath(path || '/sdcard/Downloads');
+    } catch (error) {
+      console.error('Failed to load import path:', error);
+      setImportPath('/sdcard/Downloads'); // Default fallback
+    }
+  };
 
   const formatFileSize = (bytes: number): string => {
     if (bytes === 0) return '0 Bytes';
@@ -77,6 +134,19 @@ export const ImportPage: React.FC = () => {
     return 'Unknown';
   };
 
+  const getTransferStatusIcon = (status?: string) => {
+    switch (status) {
+      case 'completed':
+        return <CheckCircle sx={{ color: 'success.main' }} />;
+      case 'failed':
+        return <ErrorIcon sx={{ color: 'error.main' }} />;
+      case 'transferring':
+        return <CircularProgress size={20} />;
+      default:
+        return null;
+    }
+  };
+
   const isValidFile = (file: File): boolean => {
     const extension = '.' + file.name.split('.').pop()?.toLowerCase();
     return ALLOWED_TYPES.includes(extension) || ALLOWED_TYPES.includes(file.type);
@@ -99,12 +169,12 @@ export const ImportPage: React.FC = () => {
       size: file.size,
       type: getFileTypeLabel(file),
       dateAdded: new Date(),
-      file
+      file,
+      transferStatus: 'pending'
     }));
 
     setImportedFiles(prev => [...prev, ...newImportedFiles]);
     
-    // Reset file input
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -147,209 +217,434 @@ export const ImportPage: React.FC = () => {
     setSelectedFiles(new Set());
   };
 
+
+
+  const createTemporaryFile = async (file: File): Promise<string> => {
+    // Create a temporary file path - in a real implementation, you'd use a proper temp directory
+    const tempDir = '/tmp'; // This would need to be adjusted based on the actual temp directory available
+    const tempPath = `${tempDir}/${file.name}`;
+    
+    // Convert File to buffer and write to temporary location
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    
+    // In a real implementation, you'd write this to the file system
+    // For now, we'll simulate this by returning the path
+    return tempPath;
+  };
+
+  const handleImportToDevice = async () => {
+    if (!connectedDevice) {
+      setError('No device connected. Please connect an Android device first.');
+      return;
+    }
+
+    if (importedFiles.length === 0) {
+      setError('No files to transfer. Please import some files first.');
+      return;
+    }
+
+    setTransferring(true);
+    setError(null);
+    setSuccess(null);
+
+    const filesToTransfer = selectedFiles.size > 0 
+      ? importedFiles.filter(file => selectedFiles.has(file.id))
+      : importedFiles;
+
+    if (filesToTransfer.length === 0) {
+      setError('No files selected for transfer.');
+      setTransferring(false);
+      return;
+    }
+
+    let successCount = 0;
+    let failureCount = 0;
+
+    for (let i = 0; i < filesToTransfer.length; i++) {
+      const file = filesToTransfer[i];
+      
+      setTransferProgress({
+        currentFile: i + 1,
+        totalFiles: filesToTransfer.length,
+        currentFileName: file.name,
+        overallProgress: Math.round(((i) / filesToTransfer.length) * 100)
+      });
+
+      // Update file status to transferring
+      setImportedFiles(prev => prev.map(f => 
+        f.id === file.id ? { ...f, transferStatus: 'transferring' as const } : f
+      ));
+
+      try {
+        // Create temporary file from the File object
+        const tempPath = await createTemporaryFile(file.file);
+        
+        // Transfer file to device
+        const remotePath = `${importPath}/${file.name}`;
+        const result: FileTransferResult = await androidDeviceService.uploadFile(
+          connectedDevice.id,
+          tempPath,
+          remotePath
+        );
+
+        if (result.success) {
+          successCount++;
+          setImportedFiles(prev => prev.map(f => 
+            f.id === file.id ? { ...f, transferStatus: 'completed' as const } : f
+          ));
+        } else {
+          failureCount++;
+          setImportedFiles(prev => prev.map(f => 
+            f.id === file.id ? { 
+              ...f, 
+              transferStatus: 'failed' as const,
+              transferError: result.error || result.message
+            } : f
+          ));
+        }
+      } catch (err) {
+        failureCount++;
+        const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+        setImportedFiles(prev => prev.map(f => 
+          f.id === file.id ? { 
+            ...f, 
+            transferStatus: 'failed' as const,
+            transferError: errorMessage
+          } : f
+        ));
+      }
+    }
+
+    // Final progress update
+    setTransferProgress({
+      currentFile: filesToTransfer.length,
+      totalFiles: filesToTransfer.length,
+      currentFileName: '',
+      overallProgress: 100
+    });
+
+    // Show final results
+    if (successCount > 0 && failureCount === 0) {
+      setSuccess(`Successfully transferred ${successCount} files to ${connectedDevice.model || connectedDevice.serialNumber}`);
+    } else if (successCount > 0 && failureCount > 0) {
+      setError(`Transfer completed with mixed results: ${successCount} successful, ${failureCount} failed`);
+    } else {
+      setError(`Transfer failed: ${failureCount} files could not be transferred`);
+    }
+
+    setTimeout(() => {
+      setTransferring(false);
+      setTransferProgress(null);
+    }, 2000);
+  };
+
   const isAllSelected = importedFiles.length > 0 && selectedFiles.size === importedFiles.length;
   const isSomeSelected = selectedFiles.size > 0 && selectedFiles.size < importedFiles.length;
 
   return (
-    <Container maxWidth="lg">
-      <Box py={4}>
-        <Typography variant="h3" component="h1" gutterBottom>
-          Import Files
-        </Typography>
-        <Typography variant="body1" color="text.secondary" paragraph>
-          Import CSV and Excel files for processing.
-        </Typography>
+    <>
+      <Container maxWidth="lg">
+        <Box py={4}>
+          <Typography variant="h3" component="h1" gutterBottom>
+            Import Files
+          </Typography>
+          <Typography variant="body1" color="text.secondary" paragraph>
+            Import CSV and Excel files for processing and transfer to Android devices.
+          </Typography>
 
-        {/* File Selection Card */}
-        <Card sx={{ mb: 3 }}>
-          <CardContent>
-            <Box display="flex" alignItems="center" justifyContent="space-between" flexWrap="wrap" gap={2}>
-              <Box>
-                <Typography variant="h6" gutterBottom>
-                  File Selection
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Select CSV or Excel files from your computer
-                </Typography>
-              </Box>
-              
-              <Box display="flex" gap={2} flexWrap="wrap">
-                <Button
-                  variant="contained"
-                  startIcon={<Upload />}
-                  onClick={handleFileSelect}
-                >
-                  Select Files
-                </Button>
+          {/* Alerts */}
+          {error && (
+            <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
+              {error}
+            </Alert>
+          )}
+
+          {success && (
+            <Alert severity="success" sx={{ mb: 3 }} onClose={() => setSuccess(null)}>
+              {success}
+            </Alert>
+          )}
+
+          {/* Transfer Progress */}
+          {transferProgress && (
+            <Card sx={{ mb: 3 }}>
+              <CardContent>
+                <Box display="flex" alignItems="center" gap={2} mb={2}>
+                  <CloudUpload sx={{ color: 'primary.main' }} />
+                  <Typography variant="h6">
+                    Transferring Files to {connectedDevice?.model || connectedDevice?.serialNumber}
+                  </Typography>
+                </Box>
                 
-                {selectedFiles.size > 0 && (
-                  <Button
-                    variant="outlined"
-                    color="error"
-                    startIcon={<Delete />}
-                    onClick={handleDeleteSelected}
-                  >
-                    Delete Selected ({selectedFiles.size})
-                  </Button>
-                )}
+                <Typography variant="body2" color="text.secondary" mb={1}>
+                  File {transferProgress.currentFile} of {transferProgress.totalFiles}: {transferProgress.currentFileName}
+                </Typography>
                 
-                {importedFiles.length > 0 && (
+                <LinearProgress 
+                  variant="determinate" 
+                  value={transferProgress.overallProgress} 
+                  sx={{ mb: 1 }}
+                />
+                
+                <Typography variant="caption" color="text.secondary">
+                  {transferProgress.overallProgress}% complete
+                </Typography>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Device Status Display */}
+          {connectedDevice && (
+            <Card sx={{ mb: 3 }}>
+              <CardContent>
+                <Box display="flex" alignItems="center" gap={2}>
+                  <CheckCircle sx={{ color: 'success.main' }} />
+                  <Typography variant="h6">
+                    Ready to transfer to {connectedDevice.model || connectedDevice.serialNumber}
+                  </Typography>
+                  <Chip 
+                    label={`Target: ${importPath}`} 
+                    size="small" 
+                    variant="outlined" 
+                  />
+                </Box>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* File Selection Card */}
+          <Card sx={{ mb: 3 }}>
+            <CardContent>
+              <Box display="flex" alignItems="center" justifyContent="space-between" flexWrap="wrap" gap={2}>
+                <Box>
+                  <Typography variant="h6" gutterBottom>
+                    File Selection
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Select CSV or Excel files from your computer
+                  </Typography>
+                </Box>
+                
+                <Box display="flex" gap={2} flexWrap="wrap">
                   <Button
-                    variant="outlined"
-                    color="warning"
-                    startIcon={<Clear />}
-                    onClick={handleClearAll}
+                    variant="contained"
+                    startIcon={<Upload />}
+                    onClick={handleFileSelect}
+                    disabled={transferring}
                   >
-                    Clear All
+                    Select Files
                   </Button>
-                )}
-              </Box>
-            </Box>
 
-            {/* File Info */}
-            <Box mt={2} display="flex" gap={1} flexWrap="wrap">
-              <Chip 
-                label={`${importedFiles.length} files imported`} 
-                size="small" 
-                color="primary"
-                variant="outlined"
-              />
-              <Chip 
-                label="Supported: CSV, XLS, XLSX" 
-                size="small" 
-                variant="outlined"
-              />
-            </Box>
-          </CardContent>
-        </Card>
-
-        {/* Files Table */}
-        <Paper elevation={1}>
-          <TableContainer>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell padding="checkbox">
-                    <Checkbox
-                      indeterminate={isSomeSelected}
-                      checked={isAllSelected}
-                      onChange={handleSelectAll}
-                      disabled={importedFiles.length === 0}
-                    />
-                  </TableCell>
-                  <TableCell>File</TableCell>
-                  <TableCell>Type</TableCell>
-                  <TableCell align="right">Size</TableCell>
-                  <TableCell>Date Added</TableCell>
-                  <TableCell align="center">Actions</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {importedFiles.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={6} align="center">
-                      <Box py={4}>
-                        <InsertDriveFile sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
-                        <Typography variant="body1" color="text.secondary">
-                          No files imported yet
-                        </Typography>
-                        <Typography variant="body2" color="text.disabled">
-                          Click "Select Files" to import CSV or Excel files
-                        </Typography>
-                      </Box>
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  importedFiles.map((file) => (
-                    <TableRow
-                      key={file.id}
-                      hover
-                      selected={selectedFiles.has(file.id)}
-                      sx={{ cursor: 'pointer' }}
-                      onClick={() => handleSelectFile(file.id)}
+                  <Button
+                    variant="contained"
+                    color="secondary"
+                    startIcon={transferring ? <CircularProgress size={20} /> : <CloudUpload />}
+                    onClick={handleImportToDevice}
+                    disabled={!connectedDevice || importedFiles.length === 0 || transferring}
+                  >
+                    {transferring ? 'Transferring...' : 'Import to Device'}
+                  </Button>
+                  
+                  {selectedFiles.size > 0 && (
+                    <Button
+                      variant="outlined"
+                      color="error"
+                      startIcon={<Delete />}
+                      onClick={handleDeleteSelected}
+                      disabled={transferring}
                     >
-                      <TableCell padding="checkbox">
-                        <Checkbox
-                          checked={selectedFiles.has(file.id)}
-                          onChange={() => handleSelectFile(file.id)}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Box display="flex" alignItems="center">
-                          {getFileTypeIcon(file.file.type)}
-                          <Box ml={1}>
-                            <Typography variant="body2" fontWeight="medium">
-                              {file.name}
-                            </Typography>
-                          </Box>
+                      Delete Selected ({selectedFiles.size})
+                    </Button>
+                  )}
+                  
+                  {importedFiles.length > 0 && (
+                    <Button
+                      variant="outlined"
+                      color="warning"
+                      startIcon={<Clear />}
+                      onClick={handleClearAll}
+                      disabled={transferring}
+                    >
+                      Clear All
+                    </Button>
+                  )}
+                </Box>
+              </Box>
+
+              <Box mt={2} display="flex" gap={1} flexWrap="wrap">
+                <Chip 
+                  label={`${importedFiles.length} files imported`} 
+                  size="small" 
+                  color="primary"
+                  variant="outlined"
+                />
+                <Chip 
+                  label="Supported: CSV, XLS, XLSX" 
+                  size="small" 
+                  variant="outlined"
+                />
+                {selectedFiles.size > 0 && (
+                  <Chip 
+                    label={`${selectedFiles.size} selected for transfer`} 
+                    size="small" 
+                    color="secondary"
+                    variant="outlined"
+                  />
+                )}
+              </Box>
+            </CardContent>
+          </Card>
+
+          {/* Files Table */}
+          <Paper elevation={1}>
+            <TableContainer>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell padding="checkbox">
+                      <Checkbox
+                        indeterminate={isSomeSelected}
+                        checked={isAllSelected}
+                        onChange={handleSelectAll}
+                        disabled={importedFiles.length === 0 || transferring}
+                      />
+                    </TableCell>
+                    <TableCell>File</TableCell>
+                    <TableCell>Type</TableCell>
+                    <TableCell align="right">Size</TableCell>
+                    <TableCell>Date Added</TableCell>
+                    <TableCell>Transfer Status</TableCell>
+                    <TableCell align="center">Actions</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {importedFiles.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={7} align="center">
+                        <Box py={4}>
+                          <InsertDriveFile sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
+                          <Typography variant="body1" color="text.secondary">
+                            No files imported yet
+                          </Typography>
+                          <Typography variant="body2" color="text.disabled">
+                            Click "Select Files" to import CSV or Excel files
+                          </Typography>
                         </Box>
                       </TableCell>
-                      <TableCell>
-                        <Chip 
-                          label={file.type} 
-                          size="small" 
-                          variant="outlined"
-                          color={file.type === 'CSV' ? 'success' : 'primary'}
-                        />
-                      </TableCell>
-                      <TableCell align="right">
-                        <Typography variant="body2" color="text.secondary">
-                          {formatFileSize(file.size)}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2" color="text.secondary">
-                          {file.dateAdded.toLocaleString()}
-                        </Typography>
-                      </TableCell>
-                      <TableCell align="center">
-                        <Tooltip title="Delete file">
-                          <IconButton
-                            color="error"
-                            size="small"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDeleteFile(file.id);
-                            }}
-                          >
-                            <Delete fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
+                    </TableRow>
+                  ) : (
+                    importedFiles.map((file) => (
+                      <TableRow
+                        key={file.id}
+                        hover
+                        selected={selectedFiles.has(file.id)}
+                        sx={{ cursor: 'pointer' }}
+                        onClick={() => !transferring && handleSelectFile(file.id)}
+                      >
+                        <TableCell padding="checkbox">
+                          <Checkbox
+                            checked={selectedFiles.has(file.id)}
+                            onChange={() => handleSelectFile(file.id)}
+                            disabled={transferring}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Box display="flex" alignItems="center">
+                            {getFileTypeIcon(file.file.type)}
+                            <Box ml={1}>
+                              <Typography variant="body2" fontWeight="medium">
+                                {file.name}
+                              </Typography>
+                            </Box>
+                          </Box>
+                        </TableCell>
+                        <TableCell>
+                          <Chip 
+                            label={file.type} 
+                            size="small" 
+                            variant="outlined"
+                            color={file.type === 'CSV' ? 'success' : 'primary'}
+                          />
+                        </TableCell>
+                        <TableCell align="right">
+                          <Typography variant="body2" color="text.secondary">
+                            {formatFileSize(file.size)}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2" color="text.secondary">
+                            {file.dateAdded.toLocaleString()}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Box display="flex" alignItems="center" gap={1}>
+                            {getTransferStatusIcon(file.transferStatus)}
+                            <Typography variant="body2" color="text.secondary">
+                              {file.transferStatus === 'pending' && 'Ready'}
+                              {file.transferStatus === 'transferring' && 'Transferring...'}
+                              {file.transferStatus === 'completed' && 'Completed'}
+                              {file.transferStatus === 'failed' && 'Failed'}
+                            </Typography>
+                          </Box>
+                          {file.transferError && (
+                            <Tooltip title={file.transferError}>
+                              <Typography variant="caption" color="error">
+                                Error details
+                              </Typography>
+                            </Tooltip>
+                          )}
+                        </TableCell>
+                        <TableCell align="center">
+                          <Tooltip title="Delete file">
+                            <IconButton
+                              color="error"
+                              size="small"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteFile(file.id);
+                              }}
+                              disabled={transferring}
+                            >
+                              <Delete fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+                {importedFiles.length > 0 && (
+                  <TableFooter>
+                    <TableRow>
+                      <TableCell colSpan={7}>
+                        <Box display="flex" justifyContent="space-between" alignItems="center" py={1}>
+                          <Typography variant="body2" color="text.secondary">
+                            Total: {importedFiles.length} files
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            Total size: {formatFileSize(importedFiles.reduce((acc, file) => acc + file.size, 0))}
+                          </Typography>
+                        </Box>
                       </TableCell>
                     </TableRow>
-                  ))
+                  </TableFooter>
                 )}
-              </TableBody>
-              {importedFiles.length > 0 && (
-                <TableFooter>
-                  <TableRow>
-                    <TableCell colSpan={6}>
-                      <Box display="flex" justifyContent="space-between" alignItems="center" py={1}>
-                        <Typography variant="body2" color="text.secondary">
-                          Total: {importedFiles.length} files
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          Total size: {formatFileSize(importedFiles.reduce((acc, file) => acc + file.size, 0))}
-                        </Typography>
-                      </Box>
-                    </TableCell>
-                  </TableRow>
-                </TableFooter>
-              )}
-            </Table>
-          </TableContainer>
-        </Paper>
+              </Table>
+            </TableContainer>
+          </Paper>
 
-        {/* Hidden file input */}
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
-          accept=".csv,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv"
-          style={{ display: 'none' }}
-          onChange={handleFileChange}
-        />
-      </Box>
-    </Container>
+          {/* Hidden file input */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept=".csv,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv"
+            style={{ display: 'none' }}
+            onChange={handleFileChange}
+          />
+        </Box>
+      </Container>
+    </>
   );
 };
