@@ -1,4 +1,4 @@
-// src/preload.ts - Updated with database API
+// src/preload.ts
 import { contextBridge, ipcRenderer } from 'electron';
 
 // Expose protected methods that allow the renderer process to use
@@ -27,16 +27,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('adb:createDirectory', deviceId, path),
     deleteFile: (deviceId: string, path: string) => 
       ipcRenderer.invoke('adb:deleteFile', deviceId, path),
-  },
-
-  // Database-related APIs exposed via IPC
-  database: {
-    initializeDatabase: () => ipcRenderer.invoke('database:initializeDatabase'),
-    getAllSettings: () => ipcRenderer.invoke('database:getAllSettings'),
-    getSettingByKey: (key: string) => ipcRenderer.invoke('database:getSettingByKey', key),
-    createSetting: (key: string, value: string) => ipcRenderer.invoke('database:createSetting', key, value),
-    updateSetting: (key: string, value: string) => ipcRenderer.invoke('database:updateSetting', key, value),
-    upsertSetting: (key: string, value: string) => ipcRenderer.invoke('database:upsertSetting', key, value),
-    deleteSetting: (key: string) => ipcRenderer.invoke('database:deleteSetting', key),
   }
 });
