@@ -2,9 +2,15 @@
 import { app, BrowserWindow, ipcMain } from "electron";
 import * as path from "path";
 import { AdbService } from "./infrastructure/services/AdbService";
+import { SqliteService } from "./infrastructure/services/SqliteService";
+import { MainSettingRepository } from "./infrastructure/repositories/MainSettingRepository";
+import { SettingService } from "./application/services/SettingService";
 
-// Initialize ADB service in main process
+// Initialize services in main process
 const adbService = new AdbService();
+const sqliteService = new SqliteService();
+const mainSettingRepository = new MainSettingRepository(sqliteService);
+const settingService = new SettingService(mainSettingRepository);
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -31,6 +37,25 @@ function createWindow(): void {
     mainWindow.webContents.openDevTools();
   }
 }
+
+// Initialize database when app is ready
+app.whenReady().then(async () => {
+  // Initialize the settings database
+  try {
+    await mainSettingRepository.initializeDatabase();
+    console.log('Settings database initialized successfully');
+  } catch (error) {
+    console.error('Failed to initialize settings database:', error);
+  }
+
+  createWindow();
+
+  app.on("activate", () => {
+    if (BrowserWindow.getAllWindows().length === 0) {
+      createWindow();
+    }
+  });
+});
 
 // IPC Handlers for Android Device operations
 ipcMain.handle('adb:isAvailable', async () => {
@@ -122,14 +147,50 @@ ipcMain.handle('adb:deleteFile', async (_, deviceId: string, path: string) => {
   }
 });
 
-app.whenReady().then(() => {
-  createWindow();
+// IPC Handlers for Settings operations
+ipcMain.handle('settings:initialize', async () => {
+  try {
+    return await mainSettingRepository.initializeDatabase();
+  } catch (error) {
+    console.error('Error initializing settings database:', error);
+    return false;
+  }
+});
 
-  app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
-    }
-  });
+ipcMain.handle('settings:getSetting', async (_, key: string) => {
+  try {
+    return await settingService.getSetting(key as any);
+  } catch (error) {
+    console.error('Error getting setting:', error);
+    return null;
+  }
+});
+
+ipcMain.handle('settings:updateSetting', async (_, key: string, value: string) => {
+  try {
+    return await settingService.updateSetting(key as any, value);
+  } catch (error) {
+    console.error('Error updating setting:', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('settings:getAllSettings', async () => {
+  try {
+    return await settingService.getAllSettings();
+  } catch (error) {
+    console.error('Error getting all settings:', error);
+    return [];
+  }
+});
+
+ipcMain.handle('settings:deleteSetting', async (_, key: string) => {
+  try {
+    return await mainSettingRepository.deleteSetting(key as any);
+  } catch (error) {
+    console.error('Error deleting setting:', error);
+    return false;
+  }
 });
 
 app.on("window-all-closed", () => {

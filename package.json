@@ -14,12 +14,14 @@
     "author": "KSS - SangLx",
     "license": "MIT",
     "devDependencies": {
+        "@types/better-sqlite3": "^7.6.13",
         "@types/react": "^18.2.0",
         "@types/react-dom": "^18.2.0",
         "@typescript-eslint/eslint-plugin": "^6.0.0",
         "@typescript-eslint/parser": "^6.0.0",
         "css-loader": "^7.1.2",
         "electron": "^36.4.0",
+        "electron-builder": "^26.0.16",
         "eslint": "^8.45.0",
         "html-webpack-plugin": "^5.6.3",
         "style-loader": "^4.0.0",
@@ -34,15 +36,16 @@
         "@emotion/styled": "^11.11.0",
         "@mui/icons-material": "^5.14.0",
         "@mui/material": "^5.14.0",
+        "better-sqlite3": "^8.7.0",
         "react": "^18.2.0",
         "react-dom": "^18.2.0"
     },
     "build": {
-    "extraResources": [
-      {
-        "from": "tools/",
-        "to": "tools/"
-      }
-    ]
-  }
+        "extraResources": [
+            {
+                "from": "tools/",
+                "to": "tools/"
+            }
+        ]
+    }
 }

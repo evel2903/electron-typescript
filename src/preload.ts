@@ -27,5 +27,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('adb:createDirectory', deviceId, path),
     deleteFile: (deviceId: string, path: string) => 
       ipcRenderer.invoke('adb:deleteFile', deviceId, path),
+  },
+
+  // Settings-related APIs exposed via IPC
+  settings: {
+    initialize: () => ipcRenderer.invoke('settings:initialize'),
+    getSetting: (key: string) => ipcRenderer.invoke('settings:getSetting', key),
+    updateSetting: (key: string, value: string) => ipcRenderer.invoke('settings:updateSetting', key, value),
+    getAllSettings: () => ipcRenderer.invoke('settings:getAllSettings'),
+    deleteSetting: (key: string) => ipcRenderer.invoke('settings:deleteSetting', key),
   }
 });

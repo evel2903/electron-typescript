@@ -34,6 +34,7 @@ const mainConfig = {
   },
   externals: {
     electron: 'commonjs2 electron',
+    'better-sqlite3': 'commonjs2 better-sqlite3',
   },
 };
 

@@ -166,6 +166,7 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <Tab label="Import Files" />
             <Tab label="File Management" />
+            <Tab label="Settings" />
           </Tabs>
           
           <Box display="flex" alignItems="center" gap={2}>

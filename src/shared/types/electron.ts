@@ -2,6 +2,8 @@
 import { AndroidDevice } from '@/domain/entities/AndroidDevice';
 import { DeviceFile } from '@/domain/entities/DeviceFile';
 import { FileTransferResult } from '@/domain/entities/FileTransferResult';
+import { Setting } from '@/domain/entities/Setting';
+import { SettingKey } from '@/shared/constants/settings';
 
 export interface ElectronAPI {
   getVersions(): {
@@ -20,6 +22,13 @@ export interface ElectronAPI {
     pushFile(deviceId: string, localPath: string, remotePath: string): Promise<FileTransferResult>;
     createDirectory(deviceId: string, path: string): Promise<boolean>;
     deleteFile(deviceId: string, path: string): Promise<boolean>;
+  };
+  settings: {
+    initialize(): Promise<boolean>;
+    getSetting(key: SettingKey): Promise<Setting | null>;
+    updateSetting(key: SettingKey, value: string): Promise<Setting>;
+    getAllSettings(): Promise<Setting[]>;
+    deleteSetting(key: SettingKey): Promise<boolean>;
   };
 }
 
