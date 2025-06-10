@@ -14,7 +14,6 @@ import {
   Paper,
   IconButton,
   Checkbox,
-  Alert,
   Chip,
   Card,
   CardContent,
@@ -44,7 +43,6 @@ export const ImportPage: React.FC = () => {
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const MAX_FILES = 10;
   const ALLOWED_TYPES = [
     '.csv',
     '.xlsx',
@@ -94,10 +92,8 @@ export const ImportPage: React.FC = () => {
     if (files.length === 0) return;
 
     const validFiles = files.filter(isValidFile);
-    const remainingSlots = MAX_FILES - importedFiles.length;
-    const filesToAdd = validFiles.slice(0, remainingSlots);
 
-    const newImportedFiles: ImportedFile[] = filesToAdd.map(file => ({
+    const newImportedFiles: ImportedFile[] = validFiles.map(file => ({
       id: `${file.name}-${Date.now()}-${Math.random()}`,
       name: file.name,
       size: file.size,
@@ -161,7 +157,7 @@ export const ImportPage: React.FC = () => {
           Import Files
         </Typography>
         <Typography variant="body1" color="text.secondary" paragraph>
-          Import CSV and Excel files for processing. You can import up to {MAX_FILES} files at once.
+          Import CSV and Excel files for processing.
         </Typography>
 
         {/* File Selection Card */}
@@ -182,7 +178,6 @@ export const ImportPage: React.FC = () => {
                   variant="contained"
                   startIcon={<Upload />}
                   onClick={handleFileSelect}
-                  disabled={importedFiles.length >= MAX_FILES}
                 >
                   Select Files
                 </Button>
@@ -211,12 +206,12 @@ export const ImportPage: React.FC = () => {
               </Box>
             </Box>
 
-            {/* File Limits Info */}
+            {/* File Info */}
             <Box mt={2} display="flex" gap={1} flexWrap="wrap">
               <Chip 
-                label={`${importedFiles.length}/${MAX_FILES} files`} 
+                label={`${importedFiles.length} files imported`} 
                 size="small" 
-                color={importedFiles.length >= MAX_FILES ? 'error' : 'primary'}
+                color="primary"
                 variant="outlined"
               />
               <Chip 
@@ -227,13 +222,6 @@ export const ImportPage: React.FC = () => {
             </Box>
           </CardContent>
         </Card>
-
-        {/* Status Alerts */}
-        {importedFiles.length >= MAX_FILES && (
-          <Alert severity="warning" sx={{ mb: 2 }}>
-            Maximum number of files ({MAX_FILES}) reached. Remove some files to import more.
-          </Alert>
-        )}
 
         {/* Files Table */}
         <Paper elevation={1}>
