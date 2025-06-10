@@ -60,6 +60,7 @@ interface ImportedFile {
   transferStatus?: 'pending' | 'transferring' | 'completed' | 'failed';
   transferProgress?: number;
   transferError?: string;
+  tempFilePath?: string; // Store temporary file path for cleanup
 }
 
 interface TransferProgress {
@@ -97,6 +98,11 @@ export const ImportPage: React.FC<ImportPageProps> = ({ connectedDevice }) => {
 
   useEffect(() => {
     loadImportPath();
+    
+    // Cleanup any temporary files when component unmounts
+    return () => {
+      cleanupAllTemporaryFiles();
+    };
   }, []);
 
   const loadImportPath = async () => {
@@ -152,6 +158,44 @@ export const ImportPage: React.FC<ImportPageProps> = ({ connectedDevice }) => {
     return ALLOWED_TYPES.includes(extension) || ALLOWED_TYPES.includes(file.type);
   };
 
+  // Create temporary file using the main process file system API
+  const createTemporaryFile = async (file: File): Promise<string> => {
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const tempPath = await window.electronAPI.fs.writeTemporaryFile(file.name, arrayBuffer);
+      console.log(`Temporary file created at: ${tempPath}`);
+      return tempPath;
+    } catch (error) {
+      console.error('Failed to create temporary file:', error);
+      throw new Error(`Failed to create temporary file for ${file.name}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
+
+  // Clean up a single temporary file
+  const cleanupTemporaryFile = async (filePath: string): Promise<void> => {
+    try {
+      const success = await window.electronAPI.fs.cleanupTemporaryFile(filePath);
+      if (success) {
+        console.log(`Temporary file cleaned up: ${filePath}`);
+      } else {
+        console.warn(`Failed to cleanup temporary file: ${filePath}`);
+      }
+    } catch (error) {
+      console.error('Failed to cleanup temporary file:', error);
+    }
+  };
+
+  // Clean up all temporary files stored in the imported files
+  const cleanupAllTemporaryFiles = async (): Promise<void> => {
+    const filesToCleanup = importedFiles.filter(file => file.tempFilePath);
+    
+    for (const file of filesToCleanup) {
+      if (file.tempFilePath) {
+        await cleanupTemporaryFile(file.tempFilePath);
+      }
+    }
+  };
+
   const handleFileSelect = () => {
     fileInputRef.current?.click();
   };
@@ -198,7 +242,14 @@ export const ImportPage: React.FC<ImportPageProps> = ({ connectedDevice }) => {
     setSelectedFiles(newSelected);
   };
 
-  const handleDeleteFile = (fileId: string) => {
+  const handleDeleteFile = async (fileId: string) => {
+    const fileToDelete = importedFiles.find(file => file.id === fileId);
+    
+    // Clean up temporary file if it exists
+    if (fileToDelete?.tempFilePath) {
+      await cleanupTemporaryFile(fileToDelete.tempFilePath);
+    }
+    
     setImportedFiles(prev => prev.filter(file => file.id !== fileId));
     setSelectedFiles(prev => {
       const newSelected = new Set(prev);
@@ -207,30 +258,26 @@ export const ImportPage: React.FC<ImportPageProps> = ({ connectedDevice }) => {
     });
   };
 
-  const handleDeleteSelected = () => {
+  const handleDeleteSelected = async () => {
+    const filesToDelete = importedFiles.filter(file => selectedFiles.has(file.id));
+    
+    // Clean up temporary files for selected files
+    for (const file of filesToDelete) {
+      if (file.tempFilePath) {
+        await cleanupTemporaryFile(file.tempFilePath);
+      }
+    }
+    
     setImportedFiles(prev => prev.filter(file => !selectedFiles.has(file.id)));
     setSelectedFiles(new Set());
   };
 
-  const handleClearAll = () => {
+  const handleClearAll = async () => {
+    // Clean up all temporary files
+    await cleanupAllTemporaryFiles();
+    
     setImportedFiles([]);
     setSelectedFiles(new Set());
-  };
-
-
-
-  const createTemporaryFile = async (file: File): Promise<string> => {
-    // Create a temporary file path - in a real implementation, you'd use a proper temp directory
-    const tempDir = '/tmp'; // This would need to be adjusted based on the actual temp directory available
-    const tempPath = `${tempDir}/${file.name}`;
-    
-    // Convert File to buffer and write to temporary location
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    
-    // In a real implementation, you'd write this to the file system
-    // For now, we'll simulate this by returning the path
-    return tempPath;
   };
 
   const handleImportToDevice = async () => {
@@ -260,83 +307,100 @@ export const ImportPage: React.FC<ImportPageProps> = ({ connectedDevice }) => {
 
     let successCount = 0;
     let failureCount = 0;
+    const createdTempFiles: string[] = [];
 
-    for (let i = 0; i < filesToTransfer.length; i++) {
-      const file = filesToTransfer[i];
-      
-      setTransferProgress({
-        currentFile: i + 1,
-        totalFiles: filesToTransfer.length,
-        currentFileName: file.name,
-        overallProgress: Math.round(((i) / filesToTransfer.length) * 100)
-      });
-
-      // Update file status to transferring
-      setImportedFiles(prev => prev.map(f => 
-        f.id === file.id ? { ...f, transferStatus: 'transferring' as const } : f
-      ));
-
-      try {
-        // Create temporary file from the File object
-        const tempPath = await createTemporaryFile(file.file);
+    try {
+      for (let i = 0; i < filesToTransfer.length; i++) {
+        const file = filesToTransfer[i];
         
-        // Transfer file to device
-        const remotePath = `${importPath}/${file.name}`;
-        const result: FileTransferResult = await androidDeviceService.uploadFile(
-          connectedDevice.id,
-          tempPath,
-          remotePath
-        );
+        setTransferProgress({
+          currentFile: i + 1,
+          totalFiles: filesToTransfer.length,
+          currentFileName: file.name,
+          overallProgress: Math.round(((i) / filesToTransfer.length) * 100)
+        });
 
-        if (result.success) {
-          successCount++;
+        // Update file status to transferring
+        setImportedFiles(prev => prev.map(f => 
+          f.id === file.id ? { ...f, transferStatus: 'transferring' as const } : f
+        ));
+
+        try {
+          // Create temporary file from the File object
+          const tempPath = await createTemporaryFile(file.file);
+          createdTempFiles.push(tempPath);
+          
+          // Store temp file path for later cleanup
           setImportedFiles(prev => prev.map(f => 
-            f.id === file.id ? { ...f, transferStatus: 'completed' as const } : f
+            f.id === file.id ? { ...f, tempFilePath: tempPath } : f
           ));
-        } else {
+          
+          // Transfer file to device
+          const remotePath = `${importPath}/${file.name}`;
+          const result: FileTransferResult = await androidDeviceService.uploadFile(
+            connectedDevice.id,
+            tempPath,
+            remotePath
+          );
+
+          if (result.success) {
+            successCount++;
+            setImportedFiles(prev => prev.map(f => 
+              f.id === file.id ? { ...f, transferStatus: 'completed' as const } : f
+            ));
+          } else {
+            failureCount++;
+            setImportedFiles(prev => prev.map(f => 
+              f.id === file.id ? { 
+                ...f, 
+                transferStatus: 'failed' as const,
+                transferError: result.error || result.message
+              } : f
+            ));
+          }
+        } catch (err) {
           failureCount++;
+          const errorMessage = err instanceof Error ? err.message : 'Unknown error';
           setImportedFiles(prev => prev.map(f => 
             f.id === file.id ? { 
               ...f, 
               transferStatus: 'failed' as const,
-              transferError: result.error || result.message
+              transferError: errorMessage
             } : f
           ));
         }
-      } catch (err) {
-        failureCount++;
-        const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-        setImportedFiles(prev => prev.map(f => 
-          f.id === file.id ? { 
-            ...f, 
-            transferStatus: 'failed' as const,
-            transferError: errorMessage
-          } : f
-        ));
       }
+
+      // Final progress update
+      setTransferProgress({
+        currentFile: filesToTransfer.length,
+        totalFiles: filesToTransfer.length,
+        currentFileName: '',
+        overallProgress: 100
+      });
+
+      // Show final results
+      if (successCount > 0 && failureCount === 0) {
+        setSuccess(`Successfully transferred ${successCount} files to ${connectedDevice.model || connectedDevice.serialNumber}`);
+      } else if (successCount > 0 && failureCount > 0) {
+        setError(`Transfer completed with mixed results: ${successCount} successful, ${failureCount} failed`);
+      } else {
+        setError(`Transfer failed: ${failureCount} files could not be transferred`);
+      }
+    } finally {
+      // Clean up all created temporary files
+      for (const tempPath of createdTempFiles) {
+        await cleanupTemporaryFile(tempPath);
+      }
+      
+      // Clear temp file paths from state
+      setImportedFiles(prev => prev.map(f => ({ ...f, tempFilePath: undefined })));
+
+      setTimeout(() => {
+        setTransferring(false);
+        setTransferProgress(null);
+      }, 2000);
     }
-
-    // Final progress update
-    setTransferProgress({
-      currentFile: filesToTransfer.length,
-      totalFiles: filesToTransfer.length,
-      currentFileName: '',
-      overallProgress: 100
-    });
-
-    // Show final results
-    if (successCount > 0 && failureCount === 0) {
-      setSuccess(`Successfully transferred ${successCount} files to ${connectedDevice.model || connectedDevice.serialNumber}`);
-    } else if (successCount > 0 && failureCount > 0) {
-      setError(`Transfer completed with mixed results: ${successCount} successful, ${failureCount} failed`);
-    } else {
-      setError(`Transfer failed: ${failureCount} files could not be transferred`);
-    }
-
-    setTimeout(() => {
-      setTransferring(false);
-      setTransferProgress(null);
-    }, 2000);
   };
 
   const isAllSelected = importedFiles.length > 0 && selectedFiles.size === importedFiles.length;

@@ -1,6 +1,8 @@
 // src/main.ts
 import { app, BrowserWindow, ipcMain } from "electron";
 import * as path from "path";
+import * as fs from "fs";
+import * as os from "os";
 import { AdbService } from "./infrastructure/services/AdbService";
 import { SqliteService } from "./infrastructure/services/SqliteService";
 import { MainSettingRepository } from "./infrastructure/repositories/MainSettingRepository";
@@ -55,6 +57,45 @@ app.whenReady().then(async () => {
       createWindow();
     }
   });
+});
+
+// IPC Handlers for File System operations
+ipcMain.handle('fs:writeTemporaryFile', async (_, fileName: string, arrayBuffer: ArrayBuffer) => {
+  try {
+    const tempDir = os.tmpdir();
+    const sanitizedFileName = path.basename(fileName); // Security: prevent path traversal
+    const tempPath = path.join(tempDir, `electron_transfer_${Date.now()}_${Math.random().toString(36).substring(7)}_${sanitizedFileName}`);
+    
+    const buffer = Buffer.from(arrayBuffer);
+    await fs.promises.writeFile(tempPath, buffer);
+    
+    console.log(`Temporary file created: ${tempPath}`);
+    return tempPath;
+  } catch (error) {
+    console.error('Error writing temporary file:', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('fs:cleanupTemporaryFile', async (_, filePath: string) => {
+  try {
+    // Security check: only allow cleanup of files in temp directory
+    const tempDir = os.tmpdir();
+    const normalizedPath = path.normalize(filePath);
+    const normalizedTempDir = path.normalize(tempDir);
+    
+    if (!normalizedPath.startsWith(normalizedTempDir)) {
+      console.error('Security violation: Attempt to delete file outside temp directory');
+      return false;
+    }
+
+    await fs.promises.unlink(filePath);
+    console.log(`Temporary file cleaned up: ${filePath}`);
+    return true;
+  } catch (error) {
+    console.error('Error cleaning up temporary file:', error);
+    return false;
+  }
 });
 
 // IPC Handlers for Android Device operations

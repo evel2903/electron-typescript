@@ -12,6 +12,13 @@ export interface ElectronAPI {
     electron: string;
   };
   getPlatform(): string;
+  
+  // File System operations for temporary file management
+  fs: {
+    writeTemporaryFile(fileName: string, arrayBuffer: ArrayBuffer): Promise<string>;
+    cleanupTemporaryFile(filePath: string): Promise<boolean>;
+  };
+  
   adb: {
     isAvailable(): Promise<boolean>;
     listDevices(): Promise<AndroidDevice[]>;

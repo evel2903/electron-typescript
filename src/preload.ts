@@ -12,6 +12,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   
   getPlatform: () => process.platform,
   
+  // File System APIs for temporary file operations
+  fs: {
+    writeTemporaryFile: (fileName: string, arrayBuffer: ArrayBuffer) => 
+      ipcRenderer.invoke('fs:writeTemporaryFile', fileName, arrayBuffer),
+    cleanupTemporaryFile: (filePath: string) => 
+      ipcRenderer.invoke('fs:cleanupTemporaryFile', filePath),
+  },
+  
   // ADB-related APIs exposed via IPC
   adb: {
     isAvailable: () => ipcRenderer.invoke('adb:isAvailable'),
