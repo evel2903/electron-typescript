@@ -3,12 +3,15 @@
     "version": "1.0.0",
     "description": "An Electron application following Clean Architecture principles with MUI",
     "scripts": {
+        "rebuild": "electron-rebuild",
+        "postinstall": "electron-rebuild",
         "build": "webpack --mode=production",
         "build:dev": "webpack --mode=development",
         "build:renderer": "webpack --config webpack.renderer.js --mode=development",
         "watch": "webpack --mode=development --watch",
         "start": "npm run build && electron ./dist/main.js",
         "dev": "npm run build:dev && electron ./dist/main.js --dev",
+        "dev:rebuild": "npm run rebuild && npm run build:dev && electron ./dist/main.js --dev",
         "lint": "eslint -c .eslintrc --ext .ts,.tsx ./src"
     },
     "author": "KSS - SangLx",
@@ -22,6 +25,7 @@
         "css-loader": "^7.1.2",
         "electron": "^36.4.0",
         "electron-builder": "^26.0.16",
+        "electron-rebuild": "^3.2.9",
         "eslint": "^8.45.0",
         "html-webpack-plugin": "^5.6.3",
         "style-loader": "^4.0.0",
@@ -36,7 +40,7 @@
         "@emotion/styled": "^11.11.0",
         "@mui/icons-material": "^5.14.0",
         "@mui/material": "^5.14.0",
-        "better-sqlite3": "^8.7.0",
+        "better-sqlite3": "^11.10.0",
         "react": "^18.2.0",
         "react-dom": "^18.2.0"
     },

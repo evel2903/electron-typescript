@@ -20,7 +20,7 @@ export class SqliteService {
     
     if (isDev) {
       // In development, place database at project root level
-      basePath = path.join(__dirname, '../../');
+      basePath = path.join(__dirname, '../');
     } else {
       // In production, place database in application directory
       basePath = path.dirname(process.execPath);
