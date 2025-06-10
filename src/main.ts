@@ -1,10 +1,13 @@
-// src/main.ts
+// src/main.ts - Updated with database support
 import { app, BrowserWindow, ipcMain } from "electron";
 import * as path from "path";
 import { AdbService } from "./infrastructure/services/AdbService";
+import { DatabaseService } from "./infrastructure/services/DatabaseService";
+import { Setting } from "./domain/entities/Setting";
 
-// Initialize ADB service in main process
+// Initialize services in main process
 const adbService = new AdbService();
+const databaseService = DatabaseService.getInstance();
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -32,7 +35,151 @@ function createWindow(): void {
   }
 }
 
-// IPC Handlers for Android Device operations
+// Database initialization and IPC handlers
+async function initializeDatabase() {
+  try {
+    await databaseService.initialize();
+    console.log('Database service initialized successfully');
+  } catch (error) {
+    console.error('Failed to initialize database service:', error);
+  }
+}
+
+// Database IPC Handlers
+ipcMain.handle('database:initializeDatabase', async () => {
+  try {
+    await databaseService.initialize();
+    return true;
+  } catch (error) {
+    console.error('Error initializing database:', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('database:getAllSettings', async (): Promise<Setting[]> => {
+  try {
+    const db = databaseService.getDatabase();
+    const stmt = db.prepare('SELECT key, value, created_at, updated_at FROM sys_setting ORDER BY key');
+    const rows = stmt.all() as any[];
+    
+    return rows.map(row => ({
+      key: row.key,
+      value: row.value,
+      createdAt: new Date(row.created_at),
+      updatedAt: new Date(row.updated_at)
+    }));
+  } catch (error) {
+    console.error('Error getting all settings:', error);
+    return [];
+  }
+});
+
+ipcMain.handle('database:getSettingByKey', async (_, key: string): Promise<Setting | null> => {
+  try {
+    const db = databaseService.getDatabase();
+    const stmt = db.prepare('SELECT key, value, created_at, updated_at FROM sys_setting WHERE key = ?');
+    const row = stmt.get(key) as any;
+    
+    if (!row) return null;
+    
+    return {
+      key: row.key,
+      value: row.value,
+      createdAt: new Date(row.created_at),
+      updatedAt: new Date(row.updated_at)
+    };
+  } catch (error) {
+    console.error('Error getting setting by key:', error);
+    return null;
+  }
+});
+
+ipcMain.handle('database:createSetting', async (_, key: string, value: string): Promise<Setting> => {
+  try {
+    const db = databaseService.getDatabase();
+    const stmt = db.prepare('INSERT INTO sys_setting (key, value) VALUES (?, ?)');
+    stmt.run(key, value);
+    
+    const selectStmt = db.prepare('SELECT key, value, created_at, updated_at FROM sys_setting WHERE key = ?');
+    const row = selectStmt.get(key) as any;
+    
+    return {
+      key: row.key,
+      value: row.value,
+      createdAt: new Date(row.created_at),
+      updatedAt: new Date(row.updated_at)
+    };
+  } catch (error) {
+    console.error('Error creating setting:', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('database:updateSetting', async (_, key: string, value: string): Promise<Setting> => {
+  try {
+    const db = databaseService.getDatabase();
+    const stmt = db.prepare('UPDATE sys_setting SET value = ?, updated_at = CURRENT_TIMESTAMP WHERE key = ?');
+    const result = stmt.run(value, key);
+    
+    if (result.changes === 0) {
+      throw new Error(`Setting with key '${key}' not found`);
+    }
+    
+    const selectStmt = db.prepare('SELECT key, value, created_at, updated_at FROM sys_setting WHERE key = ?');
+    const row = selectStmt.get(key) as any;
+    
+    return {
+      key: row.key,
+      value: row.value,
+      createdAt: new Date(row.created_at),
+      updatedAt: new Date(row.updated_at)
+    };
+  } catch (error) {
+    console.error('Error updating setting:', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('database:upsertSetting', async (_, key: string, value: string): Promise<Setting> => {
+  try {
+    const db = databaseService.getDatabase();
+    const stmt = db.prepare(`
+      INSERT INTO sys_setting (key, value) 
+      VALUES (?, ?) 
+      ON CONFLICT(key) DO UPDATE SET 
+        value = excluded.value, 
+        updated_at = CURRENT_TIMESTAMP
+    `);
+    stmt.run(key, value);
+    
+    const selectStmt = db.prepare('SELECT key, value, created_at, updated_at FROM sys_setting WHERE key = ?');
+    const row = selectStmt.get(key) as any;
+    
+    return {
+      key: row.key,
+      value: row.value,
+      createdAt: new Date(row.created_at),
+      updatedAt: new Date(row.updated_at)
+    };
+  } catch (error) {
+    console.error('Error upserting setting:', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('database:deleteSetting', async (_, key: string): Promise<boolean> => {
+  try {
+    const db = databaseService.getDatabase();
+    const stmt = db.prepare('DELETE FROM sys_setting WHERE key = ?');
+    const result = stmt.run(key);
+    return result.changes > 0;
+  } catch (error) {
+    console.error('Error deleting setting:', error);
+    return false;
+  }
+});
+
+// ADB IPC Handlers (existing handlers remain unchanged)
 ipcMain.handle('adb:isAvailable', async () => {
   try {
     return await adbService.isAdbAvailable();
@@ -122,7 +269,8 @@ ipcMain.handle('adb:deleteFile', async (_, deviceId: string, path: string) => {
   }
 });
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  await initializeDatabase();
   createWindow();
 
   app.on("activate", () => {
@@ -133,6 +281,7 @@ app.whenReady().then(() => {
 });
 
 app.on("window-all-closed", () => {
+  databaseService.close();
   if (process.platform !== "darwin") {
     app.quit();
   }

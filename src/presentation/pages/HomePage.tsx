@@ -1,9 +1,10 @@
-// src/presentation/pages/HomePage.tsx
+// src/presentation/pages/HomePage.tsx - Updated with Settings navigation
 import React, { useState, useEffect } from 'react';
 import { Box } from '@mui/material';
 import { Header } from '../components/Header';
 import { ImportPage } from './ImportPage';
 import { Tab2Page } from './Tab2Page';
+import { SettingsPage } from './SettingsPage';
 import { DIContainer } from '@/application/services/DIContainer';
 import { ElectronAPIService } from '@/infrastructure/services/ElectronAPIService';
 import { AndroidDevice } from '@/domain/entities/AndroidDevice';
@@ -26,6 +27,8 @@ export const HomePage: React.FC = () => {
         return <ImportPage />;
       case 1:
         return <Tab2Page />;
+      case 2:
+        return <SettingsPage />;
       default:
         return <ImportPage />;
     }

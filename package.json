@@ -1,7 +1,7 @@
 {
     "name": "electron-clean-architecture-app",
     "version": "1.0.0",
-    "description": "An Electron application following Clean Architecture principles with MUI",
+    "description": "An Electron application following Clean Architecture principles with MUI and SQLite",
     "scripts": {
         "build": "webpack --mode=production",
         "build:dev": "webpack --mode=development",
@@ -14,6 +14,7 @@
     "author": "KSS - SangLx",
     "license": "MIT",
     "devDependencies": {
+        "@types/better-sqlite3": "^7.6.8",
         "@types/react": "^18.2.0",
         "@types/react-dom": "^18.2.0",
         "@typescript-eslint/eslint-plugin": "^6.0.0",
@@ -34,15 +35,16 @@
         "@emotion/styled": "^11.11.0",
         "@mui/icons-material": "^5.14.0",
         "@mui/material": "^5.14.0",
+        "better-sqlite3": "^9.4.3",
         "react": "^18.2.0",
         "react-dom": "^18.2.0"
     },
     "build": {
-    "extraResources": [
-      {
-        "from": "tools/",
-        "to": "tools/"
-      }
-    ]
-  }
+        "extraResources": [
+            {
+                "from": "tools/",
+                "to": "tools/"
+            }
+        ]
+    }
 }
