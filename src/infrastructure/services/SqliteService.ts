@@ -1,4 +1,4 @@
-// src/infrastructure/services/SqliteService.ts - Updated with data import tables
+// src/infrastructure/services/SqliteService.ts - Updated with new tables
 import Database from 'better-sqlite3';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -127,7 +127,7 @@ export class SqliteService {
         END
       `);
 
-      // Product table
+      // Product table (existing)
       await this.run(`
         CREATE TABLE IF NOT EXISTS product (
           jan_code TEXT PRIMARY KEY,
@@ -148,7 +148,7 @@ export class SqliteService {
         END
       `);
 
-      // Location table
+      // Location table (existing)
       await this.run(`
         CREATE TABLE IF NOT EXISTS location (
           shop_code TEXT PRIMARY KEY,
@@ -167,7 +167,7 @@ export class SqliteService {
         END
       `);
 
-      // Staff table
+      // Staff table (existing)
       await this.run(`
         CREATE TABLE IF NOT EXISTS staff (
           staff_code TEXT PRIMARY KEY,
@@ -186,7 +186,7 @@ export class SqliteService {
         END
       `);
 
-      // Supplier table
+      // Supplier table (existing)
       await this.run(`
         CREATE TABLE IF NOT EXISTS supplier (
           supplier_code TEXT PRIMARY KEY,
@@ -205,14 +205,129 @@ export class SqliteService {
         END
       `);
 
-      // Create indexes for better performance
+      // NEW: Inventory Data table
+      await this.run(`
+        CREATE TABLE IF NOT EXISTS inventory_data (
+          id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+          input_date TEXT,
+          staff_code TEXT NOT NULL,
+          shop_code TEXT NOT NULL,
+          shelf_number INTEGER NOT NULL,
+          shelf_position INTEGER NOT NULL,
+          jan_code TEXT,
+          quantity INTEGER NOT NULL,
+          cost REAL NOT NULL,
+          price INTEGER NOT NULL,
+          system_quantity INTEGER NOT NULL,
+          quantity_discrepancy INTEGER NOT NULL,
+          note TEXT NOT NULL,
+          update_date TEXT,
+          update_time TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
+      // Create trigger to update the updated_at timestamp for inventory_data
+      await this.run(`
+        CREATE TRIGGER IF NOT EXISTS inventory_data_updated_at 
+        AFTER UPDATE ON inventory_data
+        BEGIN
+          UPDATE inventory_data SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+        END
+      `);
+
+      // NEW: Stockin Data table
+      await this.run(`
+        CREATE TABLE IF NOT EXISTS stockin_data (
+          id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+          input_date TEXT NOT NULL,
+          supplier_code TEXT,
+          supplier_name TEXT,
+          slip_number TEXT NOT NULL,
+          location TEXT NOT NULL,
+          shelf_no INTEGER NOT NULL,
+          shelf_position INTEGER NOT NULL,
+          product_code TEXT NOT NULL,
+          quantity INTEGER NOT NULL,
+          staff_code TEXT NOT NULL,
+          shop_code TEXT NOT NULL,
+          note TEXT NOT NULL,
+          update_date TEXT,
+          update_time TEXT,
+          ignore_trigger INTEGER NOT NULL DEFAULT 0,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
+      // Create trigger to update the updated_at timestamp for stockin_data
+      await this.run(`
+        CREATE TRIGGER IF NOT EXISTS stockin_data_updated_at 
+        AFTER UPDATE ON stockin_data
+        BEGIN
+          UPDATE stockin_data SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+        END
+      `);
+
+      // NEW: Stockout Data table
+      await this.run(`
+        CREATE TABLE IF NOT EXISTS stockout_data (
+          id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+          input_date TEXT NOT NULL,
+          supplier_code TEXT NOT NULL,
+          slip_number TEXT NOT NULL,
+          location TEXT NOT NULL,
+          shelf_no INTEGER NOT NULL,
+          shelf_position INTEGER NOT NULL,
+          product_code TEXT NOT NULL,
+          quantity INTEGER NOT NULL,
+          staff_code TEXT NOT NULL,
+          shop_code TEXT NOT NULL,
+          note TEXT NOT NULL,
+          update_date TEXT,
+          update_time TEXT,
+          dept_code TEXT NOT NULL,
+          dept_name TEXT NOT NULL,
+          ignore_trigger INTEGER NOT NULL DEFAULT 0,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
+      // Create trigger to update the updated_at timestamp for stockout_data
+      await this.run(`
+        CREATE TRIGGER IF NOT EXISTS stockout_data_updated_at 
+        AFTER UPDATE ON stockout_data
+        BEGIN
+          UPDATE stockout_data SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+        END
+      `);
+
+      // Create indexes for better performance on existing tables
       await this.run(`CREATE INDEX IF NOT EXISTS idx_product_supplier_code ON product(supplier_code)`);
       await this.run(`CREATE INDEX IF NOT EXISTS idx_product_name ON product(product_name)`);
       await this.run(`CREATE INDEX IF NOT EXISTS idx_location_name ON location(shop_name)`);
       await this.run(`CREATE INDEX IF NOT EXISTS idx_staff_name ON staff(staff_name)`);
       await this.run(`CREATE INDEX IF NOT EXISTS idx_supplier_name ON supplier(supplier_name)`);
 
-      this.logger.info('Database schema initialized successfully');
+      // Create indexes for new tables
+      await this.run(`CREATE INDEX IF NOT EXISTS idx_inventory_staff_shop ON inventory_data(staff_code, shop_code)`);
+      await this.run(`CREATE INDEX IF NOT EXISTS idx_inventory_shelf ON inventory_data(shelf_number, shelf_position)`);
+      await this.run(`CREATE INDEX IF NOT EXISTS idx_inventory_jan_code ON inventory_data(jan_code)`);
+      await this.run(`CREATE INDEX IF NOT EXISTS idx_inventory_input_date ON inventory_data(input_date)`);
+
+      await this.run(`CREATE INDEX IF NOT EXISTS idx_stockin_slip_product ON stockin_data(slip_number, product_code)`);
+      await this.run(`CREATE INDEX IF NOT EXISTS idx_stockin_input_date ON stockin_data(input_date)`);
+      await this.run(`CREATE INDEX IF NOT EXISTS idx_stockin_staff_shop ON stockin_data(staff_code, shop_code)`);
+      await this.run(`CREATE INDEX IF NOT EXISTS idx_stockin_supplier ON stockin_data(supplier_code)`);
+
+      await this.run(`CREATE INDEX IF NOT EXISTS idx_stockout_slip_product ON stockout_data(slip_number, product_code)`);
+      await this.run(`CREATE INDEX IF NOT EXISTS idx_stockout_input_date ON stockout_data(input_date)`);
+      await this.run(`CREATE INDEX IF NOT EXISTS idx_stockout_staff_shop ON stockout_data(staff_code, shop_code)`);
+      await this.run(`CREATE INDEX IF NOT EXISTS idx_stockout_dept ON stockout_data(dept_code)`);
+
+      this.logger.info('Database schema initialized successfully with new tables');
       return true;
     } catch (error) {
       this.logger.error('Failed to initialize database schema:', error as Error);
