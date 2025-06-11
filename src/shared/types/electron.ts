@@ -1,4 +1,4 @@
-// src/shared/types/electron.ts - Updated with data import types
+// src/shared/types/electron.ts - Updated with data synchronization types
 import { AndroidDevice } from '@/domain/entities/AndroidDevice';
 import { DeviceFile } from '@/domain/entities/DeviceFile';
 import { FileTransferResult } from '@/domain/entities/FileTransferResult';
@@ -10,6 +10,24 @@ import { Staff } from '@/domain/entities/Staff';
 import { Supplier } from '@/domain/entities/Supplier';
 import { ImportResult } from '@/domain/entities/ImportResult';
 import { FileParseResult, ImportFileType } from '@/application/services/DataImportService';
+
+export interface SyncResult {
+  tableName: string;
+  recordsFound: number;
+  recordsInserted: number;
+  recordsUpdated: number;
+  success: boolean;
+  error?: string;
+}
+
+export interface SyncProgress {
+  currentTable: string;
+  tablesCompleted: number;
+  totalTables: number;
+  currentRecords: number;
+  totalRecords: number;
+  overallProgress: number;
+}
 
 export interface ElectronAPI {
   getVersions(): {
@@ -52,12 +70,24 @@ export interface ElectronAPI {
     detectFileType(headers: string[]): Promise<ImportFileType | null>;
   };
 
+  // Data Synchronization APIs
+  dataSync: {
+    syncFromDevice(
+      deviceId: string, 
+      remoteDatabasePath: string, 
+      progressCallback?: (progress: SyncProgress) => void
+    ): Promise<SyncResult[]>;
+  };
+
   // Data Query APIs
   data: {
     getAllProducts(): Promise<Product[]>;
     getAllLocations(): Promise<Location[]>;
     getAllStaff(): Promise<Staff[]>;
     getAllSuppliers(): Promise<Supplier[]>;
+    getInventoryDataCount(): Promise<number>;
+    getStockinDataCount(): Promise<number>;
+    getStockoutDataCount(): Promise<number>;
   };
 }
 

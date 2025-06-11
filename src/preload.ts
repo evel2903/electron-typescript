@@ -1,4 +1,4 @@
-// src/preload.ts - Updated with data import APIs
+// src/preload.ts - Updated with data synchronization APIs (types removed to prevent conflicts)
 import { contextBridge, ipcRenderer } from 'electron';
 
 // Expose protected methods that allow the renderer process to use
@@ -53,11 +53,35 @@ contextBridge.exposeInMainWorld('electronAPI', {
     detectFileType: (headers: string[]) => ipcRenderer.invoke('import:detectFileType', headers),
   },
 
+  // Data Synchronization APIs exposed via IPC
+  dataSync: {
+    syncFromDevice: (deviceId: string, remoteDatabasePath: string, progressCallback?: (progress: any) => void) => {
+      // Set up progress listener if callback provided
+      if (progressCallback) {
+        const handleProgress = (event: any, progress: any) => {
+          progressCallback(progress);
+        };
+        ipcRenderer.on('dataSync:progress', handleProgress);
+        
+        // Return a promise that cleans up the listener
+        return ipcRenderer.invoke('dataSync:syncFromDevice', deviceId, remoteDatabasePath)
+          .finally(() => {
+            ipcRenderer.removeListener('dataSync:progress', handleProgress);
+          });
+      }
+      
+      return ipcRenderer.invoke('dataSync:syncFromDevice', deviceId, remoteDatabasePath);
+    },
+  },
+
   // Data Query APIs exposed via IPC
   data: {
     getAllProducts: () => ipcRenderer.invoke('data:getAllProducts'),
     getAllLocations: () => ipcRenderer.invoke('data:getAllLocations'),
     getAllStaff: () => ipcRenderer.invoke('data:getAllStaff'),
     getAllSuppliers: () => ipcRenderer.invoke('data:getAllSuppliers'),
+    getInventoryDataCount: () => ipcRenderer.invoke('data:getInventoryDataCount'),
+    getStockinDataCount: () => ipcRenderer.invoke('data:getStockinDataCount'),
+    getStockoutDataCount: () => ipcRenderer.invoke('data:getStockoutDataCount'),
   }
 });

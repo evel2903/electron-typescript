@@ -1,4 +1,4 @@
-// src/main.ts - Updated with data import functionality
+// src/main.ts - Updated with data synchronization functionality
 import { app, BrowserWindow, ipcMain } from "electron";
 import * as path from "path";
 import * as fs from "fs";
@@ -6,11 +6,15 @@ import * as os from "os";
 import { AdbService } from "./infrastructure/services/AdbService";
 import { SqliteService } from "./infrastructure/services/SqliteService";
 import { FileParserService } from "./infrastructure/services/FileParserService";
+import { DataSyncService } from "./infrastructure/services/DataSyncService";
 import { MainSettingRepository } from "./infrastructure/repositories/MainSettingRepository";
 import { ProductRepository } from "./infrastructure/repositories/ProductRepository";
 import { LocationRepository } from "./infrastructure/repositories/LocationRepository";
 import { StaffRepository } from "./infrastructure/repositories/StaffRepository";
 import { SupplierRepository } from "./infrastructure/repositories/SupplierRepository";
+import { InventoryDataRepository } from "./infrastructure/repositories/InventoryDataRepository";
+import { StockinDataRepository } from "./infrastructure/repositories/StockinDataRepository";
+import { StockoutDataRepository } from "./infrastructure/repositories/StockoutDataRepository";
 import { SettingService } from "./application/services/SettingService";
 import { DataImportService } from "./application/services/DataImportService";
 
@@ -18,6 +22,7 @@ import { DataImportService } from "./application/services/DataImportService";
 const adbService = new AdbService();
 const sqliteService = new SqliteService();
 const fileParserService = new FileParserService();
+const dataSyncService = new DataSyncService(adbService, sqliteService);
 
 // Initialize repositories
 const mainSettingRepository = new MainSettingRepository(sqliteService);
@@ -25,6 +30,9 @@ const productRepository = new ProductRepository(sqliteService);
 const locationRepository = new LocationRepository(sqliteService);
 const staffRepository = new StaffRepository(sqliteService);
 const supplierRepository = new SupplierRepository(sqliteService);
+const inventoryDataRepository = new InventoryDataRepository(sqliteService);
+const stockinDataRepository = new StockinDataRepository(sqliteService);
+const stockoutDataRepository = new StockoutDataRepository(sqliteService);
 
 // Initialize services
 const settingService = new SettingService(mainSettingRepository);
@@ -296,6 +304,28 @@ ipcMain.handle('import:detectFileType', async (_, headers: string[]) => {
   }
 });
 
+// IPC Handlers for Data Synchronization operations
+ipcMain.handle('dataSync:syncFromDevice', async (event, deviceId: string, remoteDatabasePath: string) => {
+  try {
+    console.log(`Starting data synchronization from device: ${deviceId}, database: ${remoteDatabasePath}`);
+    
+    const results = await dataSyncService.syncDataFromDevice(
+      deviceId, 
+      remoteDatabasePath,
+      (progress) => {
+        // Send progress updates to renderer process
+        event.sender.send('dataSync:progress', progress);
+      }
+    );
+    
+    console.log('Data synchronization completed:', results);
+    return results;
+  } catch (error) {
+    console.error('Error synchronizing data from device:', error);
+    throw error;
+  }
+});
+
 // IPC Handlers for Data Query operations
 ipcMain.handle('data:getAllProducts', async () => {
   try {
@@ -330,6 +360,37 @@ ipcMain.handle('data:getAllSuppliers', async () => {
   } catch (error) {
     console.error('Error getting all suppliers:', error);
     return [];
+  }
+});
+
+// IPC Handlers for Data Statistics operations
+ipcMain.handle('data:getInventoryDataCount', async () => {
+  try {
+    const result = await sqliteService.get<{ count: number }>('SELECT COUNT(*) as count FROM inventory_data');
+    return result?.count || 0;
+  } catch (error) {
+    console.error('Error getting inventory data count:', error);
+    return 0;
+  }
+});
+
+ipcMain.handle('data:getStockinDataCount', async () => {
+  try {
+    const result = await sqliteService.get<{ count: number }>('SELECT COUNT(*) as count FROM stockin_data');
+    return result?.count || 0;
+  } catch (error) {
+    console.error('Error getting stockin data count:', error);
+    return 0;
+  }
+});
+
+ipcMain.handle('data:getStockoutDataCount', async () => {
+  try {
+    const result = await sqliteService.get<{ count: number }>('SELECT COUNT(*) as count FROM stockout_data');
+    return result?.count || 0;
+  } catch (error) {
+    console.error('Error getting stockout data count:', error);
+    return 0;
   }
 });
 
