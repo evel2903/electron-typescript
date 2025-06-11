@@ -19,6 +19,7 @@ import {
   CardContent,
   TableFooter,
   Tooltip,
+  Snackbar,
   Alert,
   CircularProgress,
   LinearProgress,
@@ -403,6 +404,14 @@ export const ImportPage: React.FC<ImportPageProps> = ({ connectedDevice }) => {
     }
   };
 
+  const handleCloseError = () => {
+    setError(null);
+  };
+
+  const handleCloseSuccess = () => {
+    setSuccess(null);
+  };
+
   const isAllSelected = importedFiles.length > 0 && selectedFiles.size === importedFiles.length;
   const isSomeSelected = selectedFiles.size > 0 && selectedFiles.size < importedFiles.length;
 
@@ -416,19 +425,6 @@ export const ImportPage: React.FC<ImportPageProps> = ({ connectedDevice }) => {
           <Typography variant="body1" color="text.secondary" paragraph>
             Import CSV and Excel files for processing and transfer to Android devices.
           </Typography>
-
-          {/* Alerts */}
-          {error && (
-            <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
-              {error}
-            </Alert>
-          )}
-
-          {success && (
-            <Alert severity="success" sx={{ mb: 3 }} onClose={() => setSuccess(null)}>
-              {success}
-            </Alert>
-          )}
 
           {/* Transfer Progress */}
           {transferProgress && (
@@ -709,6 +705,30 @@ export const ImportPage: React.FC<ImportPageProps> = ({ connectedDevice }) => {
           />
         </Box>
       </Container>
+
+      {/* Error Snackbar */}
+      <Snackbar
+        open={!!error}
+        autoHideDuration={6000}
+        onClose={handleCloseError}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+      >
+        <Alert onClose={handleCloseError} severity="error" sx={{ width: '100%' }}>
+          {error}
+        </Alert>
+      </Snackbar>
+
+      {/* Success Snackbar */}
+      <Snackbar
+        open={!!success}
+        autoHideDuration={2000}
+        onClose={handleCloseSuccess}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+      >
+        <Alert onClose={handleCloseSuccess} severity="success" sx={{ width: '100%' }}>
+          {success}
+        </Alert>
+      </Snackbar>
     </>
   );
 };

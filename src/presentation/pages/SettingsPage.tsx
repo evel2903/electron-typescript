@@ -8,6 +8,7 @@ import {
   CardContent,
   TextField,
   Button,
+  Snackbar,
   Alert,
   CircularProgress,
   Grid,
@@ -81,9 +82,6 @@ export const SettingsPage: React.FC = () => {
       
       // Refresh the settings to get updated timestamps
       await loadSettings();
-      
-      // Clear success message after 3 seconds
-      setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save setting');
     } finally {
@@ -110,6 +108,14 @@ export const SettingsPage: React.FC = () => {
     }
     setDialogOpen(false);
     setSelectedDirectory('');
+  };
+
+  const handleCloseError = () => {
+    setError(null);
+  };
+
+  const handleCloseSuccess = () => {
+    setSuccess(null);
   };
 
   const formatDateTime = (date: Date): string => {
@@ -217,19 +223,6 @@ export const SettingsPage: React.FC = () => {
             </Button>
           </Box>
 
-          {/* Alerts */}
-          {error && (
-            <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
-              {error}
-            </Alert>
-          )}
-
-          {success && (
-            <Alert severity="success" sx={{ mb: 3 }} onClose={() => setSuccess(null)}>
-              {success}
-            </Alert>
-          )}
-
           {/* Settings Form */}
           <Typography variant="h5" gutterBottom>
             Application Settings
@@ -303,6 +296,30 @@ export const SettingsPage: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Error Snackbar */}
+      <Snackbar
+        open={!!error}
+        autoHideDuration={6000}
+        onClose={handleCloseError}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+      >
+        <Alert onClose={handleCloseError} severity="error" sx={{ width: '100%' }}>
+          {error}
+        </Alert>
+      </Snackbar>
+
+      {/* Success Snackbar */}
+      <Snackbar
+        open={!!success}
+        autoHideDuration={2000}
+        onClose={handleCloseSuccess}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+      >
+        <Alert onClose={handleCloseSuccess} severity="success" sx={{ width: '100%' }}>
+          {success}
+        </Alert>
+      </Snackbar>
     </>
   );
 };
