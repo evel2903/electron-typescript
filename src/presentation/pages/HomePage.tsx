@@ -50,14 +50,34 @@ export const HomePage: React.FC = () => {
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-      <Header 
-        currentTab={currentTab} 
-        onTabChange={handleTabChange}
-        onDeviceSelected={handleDeviceSelected}
-        connectedDevice={selectedDevice}
-      />
+      {/* Fixed Header */}
+      <Box
+        sx={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          zIndex: 1100, // Ensure header stays above other content
+          backgroundColor: 'background.paper',
+          boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+        }}
+      >
+        <Header 
+          currentTab={currentTab} 
+          onTabChange={handleTabChange}
+          onDeviceSelected={handleDeviceSelected}
+          connectedDevice={selectedDevice}
+        />
+      </Box>
       
-      <Box sx={{ flexGrow: 1 }}>
+      {/* Main Content Area with Top Margin */}
+      <Box 
+        sx={{ 
+          flexGrow: 1,
+          marginTop: '56px', // Account for header height
+          minHeight: 'calc(100vh - 56px)'
+        }}
+      >
         {renderCurrentPage()}
       </Box>
     </Box>

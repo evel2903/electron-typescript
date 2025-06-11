@@ -1,4 +1,4 @@
-// src/presentation/pages/ImportPage.tsx - Updated with database import functionality
+// src/presentation/pages/ImportPage.tsx - Updated with handy system integration
 import React, { useState, useRef, useEffect } from 'react';
 import {
   Container,
@@ -490,13 +490,16 @@ export const ImportPage: React.FC<ImportPageProps> = ({ connectedDevice }) => {
             f.id === file.id ? { ...f, tempFilePath: tempPath } : f
           ));
           
+          // Ensure Import directory exists
+          //await androidDeviceService.createDirectory(connectedDevice.id, `${importPath}/Import`);
+          
           // Parallel operations: transfer to device AND import to database
           const [transferResult, importResult] = await Promise.all([
-            // Transfer file to device
+            // Transfer file to device Import directory
             androidDeviceService.uploadFile(
               connectedDevice.id,
               tempPath,
-              `${importPath}/${file.name}`
+              `${importPath}/Import/${file.name}`
             ),
             // Import data to database
             importToDatabase(file)
@@ -572,6 +575,36 @@ export const ImportPage: React.FC<ImportPageProps> = ({ connectedDevice }) => {
         currentFileName: '',
         overallProgress: 100
       });
+
+      // Create interface.txt file if there were successful transfers
+      if (transferSuccessCount > 0) {
+        try {
+          // Ensure Interface directory exists
+          //await androidDeviceService.createDirectory(connectedDevice.id, `${importPath}/Interface`);
+          
+          // Create interface.txt file with import flag
+          const interfaceContent = "{clearData:false,importFlg:true}";
+          const interfaceFileName = "interface.txt";
+          
+          // Create a temporary file for the interface content
+          const interfaceBlob = new Blob([interfaceContent], { type: 'text/plain' });
+          const interfaceFile = new File([interfaceBlob], interfaceFileName, { type: 'text/plain' });
+          const interfaceTempPath = await createTemporaryFile(interfaceFile);
+          createdTempFiles.push(interfaceTempPath);
+          
+          // Upload interface file to device
+          await androidDeviceService.uploadFile(
+            connectedDevice.id,
+            interfaceTempPath,
+            `${importPath}/Interface/${interfaceFileName}`
+          );
+          
+          console.log('Interface file created successfully');
+        } catch (error) {
+          console.error('Failed to create interface file:', error);
+          // Don't fail the entire operation if interface file creation fails
+        }
+      }
 
       setImportResults(currentImportResults);
 
@@ -714,7 +747,7 @@ export const ImportPage: React.FC<ImportPageProps> = ({ connectedDevice }) => {
                     Ready to process files with {connectedDevice.model || connectedDevice.serialNumber}
                   </Typography>
                   <Chip 
-                    label={`Target: ${importPath}`} 
+                    label={`Target: ${importPath}/Import`} 
                     size="small" 
                     variant="outlined" 
                   />
