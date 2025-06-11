@@ -52,7 +52,7 @@ export const HomePage: React.FC = () => {
   };
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
       {/* Fixed Header */}
       <Box
         sx={{
@@ -62,7 +62,8 @@ export const HomePage: React.FC = () => {
           right: 0,
           zIndex: 1100, // Ensure header stays above other content
           backgroundColor: 'background.paper',
-          boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+          boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+          height: '56px'
         }}
       >
         <Header 
@@ -73,15 +74,58 @@ export const HomePage: React.FC = () => {
         />
       </Box>
       
-      {/* Main Content Area with Top Margin */}
+      {/* Main Content Area */}
       <Box 
         sx={{ 
-          flexGrow: 1,
-          marginTop: '56px', // Account for header height
-          minHeight: 'calc(100vh - 56px)'
+          flex: 1,
+          marginTop: '56px',
+          overflow: 'auto',
+          paddingBottom: '40px' // Space for footer
         }}
       >
         {renderCurrentPage()}
+      </Box>
+      
+      {/* Fixed Footer at Bottom */}
+      <Box
+        sx={{
+          position: 'fixed',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          padding: '8px 16px',
+          textAlign: 'center',
+          borderTop: '1px solid',
+          borderColor: 'divider',
+          backgroundColor: 'background.paper',
+          fontSize: '0.75rem',
+          color: 'text.secondary',
+          height: '40px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}
+      >
+        Copyright © 2025{' '}
+        <a
+          href="https://www.k-s-s.com.vn/"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            color: 'inherit',
+            textDecoration: 'none',
+            marginLeft: '4px'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.textDecoration = 'underline';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.textDecoration = 'none';
+          }}
+        >
+          KSS Software Saigon
+        </a>
       </Box>
     </Box>
   );
