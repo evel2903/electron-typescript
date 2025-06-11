@@ -1,4 +1,4 @@
-// src/infrastructure/services/FileParserService.ts
+// src/infrastructure/services/FileParserService.ts - Fixed Excel parsing
 import * as fs from 'fs';
 import * as path from 'path';
 import { Logger } from '@/shared/utils/logger';
@@ -9,6 +9,15 @@ export class FileParserService {
 
     async parseFile(filePath: string): Promise<FileParseResult> {
         try {
+            // Verify file exists before attempting to parse
+            if (!fs.existsSync(filePath)) {
+                return {
+                    success: false,
+                    data: [],
+                    error: `File does not exist: ${filePath}`
+                };
+            }
+
             const extension = path.extname(filePath).toLowerCase();
 
             if (extension === '.csv') {
@@ -34,10 +43,9 @@ export class FileParserService {
 
     private async parseCsv(filePath: string): Promise<FileParseResult> {
         try {
-
             const Papa = require('papaparse');
             const fileContent = fs.readFileSync(filePath, 'utf8');
-            console.log(fileContent);
+            
             const parseResult = Papa.parse(fileContent, {
                 header: true,
                 skipEmptyLines: true,
@@ -69,21 +77,12 @@ export class FileParserService {
 
     private async parseExcel(filePath: string): Promise<FileParseResult> {
         try {
-            const XLSX = require('xlsx');
-            const workbook = XLSX.readFile(filePath);
-
-            // Use the first sheet
-            const sheetName = workbook.SheetNames[0];
-            const sheet = workbook.Sheets[sheetName];
-
-            // Convert to JSON with header
-            const jsonData = XLSX.utils.sheet_to_json(sheet, {
-                header: 1,
-                raw: false,
-                defval: ''
-            });
-
-            if (jsonData.length === 0) {
+            // Add delay to ensure file is fully written and accessible
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
+            // Verify file exists and is accessible
+            const stats = fs.statSync(filePath);
+            if (stats.size === 0) {
                 return {
                     success: false,
                     data: [],
@@ -91,20 +90,88 @@ export class FileParserService {
                 };
             }
 
+            this.logger.info(`Parsing Excel file: ${filePath} (${stats.size} bytes)`);
+
+            const XLSX = require('xlsx');
+            
+            // Read file as buffer first, then parse
+            const fileBuffer = fs.readFileSync(filePath);
+            const workbook = XLSX.read(fileBuffer, {
+                type: 'buffer',
+                cellStyles: false,
+                cellFormulas: false,
+                cellDates: true,
+                cellNF: false,
+                sheetStubs: false
+            });
+
+            if (!workbook.SheetNames || workbook.SheetNames.length === 0) {
+                return {
+                    success: false,
+                    data: [],
+                    error: 'Excel file contains no sheets'
+                };
+            }
+
+            // Use the first sheet
+            const sheetName = workbook.SheetNames[0];
+            const sheet = workbook.Sheets[sheetName];
+
+            if (!sheet) {
+                return {
+                    success: false,
+                    data: [],
+                    error: 'Could not access the first sheet in Excel file'
+                };
+            }
+
+            // Convert to JSON with header row
+            const jsonData = XLSX.utils.sheet_to_json(sheet, {
+                header: 1,
+                raw: false,
+                defval: '',
+                blankrows: false
+            });
+
+            if (jsonData.length === 0) {
+                return {
+                    success: false,
+                    data: [],
+                    error: 'Excel sheet is empty'
+                };
+            }
+
             // First row should be headers
             const headers = jsonData[0] as string[];
-            const dataRows = jsonData.slice(1);
+            const dataRows = jsonData.slice(1).filter((row: any[]) => {
+                // Filter out completely empty rows
+                return Array.isArray(row) && row.some(cell => cell !== null && cell !== undefined && cell !== '');
+            });
+
+            if (headers.length === 0) {
+                return {
+                    success: false,
+                    data: [],
+                    error: 'No headers found in Excel file'
+                };
+            }
 
             // Convert to objects with proper typing
             const data = dataRows.map((row: any[]) => {
                 const obj: any = {};
                 headers.forEach((header, index) => {
-                    obj[header] = row[index] || '';
+                    // Clean up header names (remove extra spaces, normalize)
+                    const cleanHeader = String(header).trim();
+                    if (cleanHeader) {
+                        obj[cleanHeader] = row[index] !== undefined && row[index] !== null ? String(row[index]).trim() : '';
+                    }
                 });
                 return obj;
             });
 
-            const detectedType = this.detectFileType(headers);
+            const detectedType = this.detectFileType(headers.map(h => String(h).trim()));
+
+            this.logger.info(`Successfully parsed Excel file: ${data.length} data rows, detected type: ${detectedType}`);
 
             return {
                 success: true,
@@ -122,28 +189,37 @@ export class FileParserService {
     }
 
     private detectFileType(headers: string[]): ImportFileType | undefined {
-        const normalizedHeaders = headers.map(h => h.toLowerCase().trim());
+        const normalizedHeaders = headers
+            .filter(h => h && typeof h === 'string')
+            .map(h => h.toLowerCase().trim().replace(/\s+/g, '_'));
 
-        // Product file detection
-        if (normalizedHeaders.includes('jan_code') && normalizedHeaders.includes('product_name')) {
+        this.logger.debug('Detecting file type from headers:', normalizedHeaders);
+
+        // Product file detection - look for jan_code and product_name
+        if (normalizedHeaders.some(h => h.includes('jan_code') || h.includes('jan') || h.includes('barcode')) && 
+            normalizedHeaders.some(h => h.includes('product_name') || h.includes('product') || h.includes('name'))) {
             return 'product';
         }
 
-        // Location file detection
-        if (normalizedHeaders.includes('shop_code') && normalizedHeaders.includes('shop_name')) {
+        // Location file detection - look for shop_code and shop_name
+        if (normalizedHeaders.some(h => h.includes('shop_code') || h.includes('shop') || h.includes('location_code')) && 
+            normalizedHeaders.some(h => h.includes('shop_name') || h.includes('location_name') || h.includes('store'))) {
             return 'location';
         }
 
-        // Staff file detection
-        if (normalizedHeaders.includes('staff_code') && normalizedHeaders.includes('staff_name')) {
+        // Staff file detection - look for staff_code and staff_name
+        if (normalizedHeaders.some(h => h.includes('staff_code') || h.includes('employee_code') || h.includes('emp_code')) && 
+            normalizedHeaders.some(h => h.includes('staff_name') || h.includes('employee_name') || h.includes('emp_name'))) {
             return 'staff';
         }
 
-        // Supplier file detection
-        if (normalizedHeaders.includes('supplier_code') && normalizedHeaders.includes('supplier_name')) {
+        // Supplier file detection - look for supplier_code and supplier_name
+        if (normalizedHeaders.some(h => h.includes('supplier_code') || h.includes('vendor_code')) && 
+            normalizedHeaders.some(h => h.includes('supplier_name') || h.includes('vendor_name'))) {
             return 'supplier';
         }
 
+        this.logger.warn('Could not detect file type from headers:', headers);
         return undefined;
     }
 }
