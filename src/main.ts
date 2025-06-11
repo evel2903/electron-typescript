@@ -1,18 +1,39 @@
-// src/main.ts
+// src/main.ts - Updated with data import functionality
 import { app, BrowserWindow, ipcMain } from "electron";
 import * as path from "path";
 import * as fs from "fs";
 import * as os from "os";
 import { AdbService } from "./infrastructure/services/AdbService";
 import { SqliteService } from "./infrastructure/services/SqliteService";
+import { FileParserService } from "./infrastructure/services/FileParserService";
 import { MainSettingRepository } from "./infrastructure/repositories/MainSettingRepository";
+import { ProductRepository } from "./infrastructure/repositories/ProductRepository";
+import { LocationRepository } from "./infrastructure/repositories/LocationRepository";
+import { StaffRepository } from "./infrastructure/repositories/StaffRepository";
+import { SupplierRepository } from "./infrastructure/repositories/SupplierRepository";
 import { SettingService } from "./application/services/SettingService";
+import { DataImportService } from "./application/services/DataImportService";
 
 // Initialize services in main process
 const adbService = new AdbService();
 const sqliteService = new SqliteService();
+const fileParserService = new FileParserService();
+
+// Initialize repositories
 const mainSettingRepository = new MainSettingRepository(sqliteService);
+const productRepository = new ProductRepository(sqliteService);
+const locationRepository = new LocationRepository(sqliteService);
+const staffRepository = new StaffRepository(sqliteService);
+const supplierRepository = new SupplierRepository(sqliteService);
+
+// Initialize services
 const settingService = new SettingService(mainSettingRepository);
+const dataImportService = new DataImportService(
+  productRepository,
+  locationRepository,
+  staffRepository,
+  supplierRepository
+);
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -42,12 +63,12 @@ function createWindow(): void {
 
 // Initialize database when app is ready
 app.whenReady().then(async () => {
-  // Initialize the settings database
+  // Initialize the database with all schemas
   try {
     await mainSettingRepository.initializeDatabase();
-    console.log('Settings database initialized successfully');
+    console.log('Database initialized successfully');
   } catch (error) {
-    console.error('Failed to initialize settings database:', error);
+    console.error('Failed to initialize database:', error);
   }
 
   createWindow();
@@ -231,6 +252,84 @@ ipcMain.handle('settings:deleteSetting', async (_, key: string) => {
   } catch (error) {
     console.error('Error deleting setting:', error);
     return false;
+  }
+});
+
+// IPC Handlers for Data Import operations
+ipcMain.handle('import:parseFile', async (_, filePath: string) => {
+  try {
+    console.log(`Parsing file: ${filePath}`);
+    return await fileParserService.parseFile(filePath);
+  } catch (error) {
+    console.error('Error parsing file:', error);
+    return {
+      success: false,
+      data: [],
+      error: error instanceof Error ? error.message : 'Unknown parsing error'
+    };
+  }
+});
+
+ipcMain.handle('import:importData', async (_, csvData: any[], fileType: string) => {
+  try {
+    console.log(`Importing ${csvData.length} records of type: ${fileType}`);
+    return await dataImportService.importData(csvData, fileType as any);
+  } catch (error) {
+    console.error('Error importing data:', error);
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : 'Unknown import error',
+      recordsProcessed: 0,
+      recordsInserted: 0,
+      recordsUpdated: 0,
+      errors: [error instanceof Error ? error.message : 'Unknown error']
+    };
+  }
+});
+
+ipcMain.handle('import:detectFileType', async (_, headers: string[]) => {
+  try {
+    return dataImportService.detectFileType(headers);
+  } catch (error) {
+    console.error('Error detecting file type:', error);
+    return null;
+  }
+});
+
+// IPC Handlers for Data Query operations
+ipcMain.handle('data:getAllProducts', async () => {
+  try {
+    return await productRepository.getAllProducts();
+  } catch (error) {
+    console.error('Error getting all products:', error);
+    return [];
+  }
+});
+
+ipcMain.handle('data:getAllLocations', async () => {
+  try {
+    return await locationRepository.getAllLocations();
+  } catch (error) {
+    console.error('Error getting all locations:', error);
+    return [];
+  }
+});
+
+ipcMain.handle('data:getAllStaff', async () => {
+  try {
+    return await staffRepository.getAllStaff();
+  } catch (error) {
+    console.error('Error getting all staff:', error);
+    return [];
+  }
+});
+
+ipcMain.handle('data:getAllSuppliers', async () => {
+  try {
+    return await supplierRepository.getAllSuppliers();
+  } catch (error) {
+    console.error('Error getting all suppliers:', error);
+    return [];
   }
 });
 
