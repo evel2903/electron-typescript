@@ -1,4 +1,4 @@
-// src/infrastructure/services/DataSyncService.ts
+// src/infrastructure/services/DataSyncService.ts - Updated with product_mst sync
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -50,8 +50,8 @@ export class DataSyncService {
       const remoteDb = new Database(localTempDbPath, { readonly: true });
       
       try {
-        // Step 3: Sync each table
-        const tablesToSync = ['inventory_data', 'stockin_data', 'stockout_data'];
+        // Step 3: Sync each table including product_mst
+        const tablesToSync = ['inventory_data', 'stockin_data', 'stockout_data', 'product_mst'];
         
         for (let i = 0; i < tablesToSync.length; i++) {
           const tableName = tablesToSync[i];
@@ -279,8 +279,48 @@ export class DataSyncService {
         return await this.upsertStockinRecord(record);
       case 'stockout_data':
         return await this.upsertStockoutRecord(record);
+      case 'product_mst':
+        return await this.upsertProductMasterRecord(record);
       default:
         throw new Error(`Unsupported table: ${tableName}`);
+    }
+  }
+
+  private async upsertProductMasterRecord(record: any): Promise<{ inserted: boolean }> {
+    try {
+      // Check if product exists in local database by jan_code
+      const existing = await this.sqliteService.get(
+        'SELECT jan_code, box_quantity FROM product WHERE jan_code = ?',
+        [record.jan_code]
+      );
+
+      if (existing) {
+        // Update existing product with new box_quantity from product_mst
+        await this.sqliteService.run(
+          'UPDATE product SET box_quantity = ?, updated_at = CURRENT_TIMESTAMP WHERE jan_code = ?',
+          [record.box_quantity || 0, record.jan_code]
+        );
+        
+        this.logger.info(`Updated box_quantity for product ${record.jan_code}: ${existing.box_quantity} -> ${record.box_quantity}`);
+        return { inserted: false };
+      } else {
+        // Create new product record with data from product_mst
+        await this.sqliteService.run(
+          'INSERT INTO product (jan_code, product_name, box_quantity, supplier_code) VALUES (?, ?, ?, ?)',
+          [
+            record.jan_code,
+            record.product_name || record.jan_code, // Use jan_code as fallback for product_name
+            record.box_quantity || 0,
+            record.supplier_code || ''
+          ]
+        );
+        
+        this.logger.info(`Created new product from product_mst: ${record.jan_code} with box_quantity: ${record.box_quantity}`);
+        return { inserted: true };
+      }
+    } catch (error) {
+      this.logger.error('Failed to upsert product master record:', error as Error);
+      throw error;
     }
   }
 

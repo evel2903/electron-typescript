@@ -1,4 +1,4 @@
-// src/presentation/pages/GetDataPage.tsx
+// src/presentation/pages/GetDataPage.tsx - Updated with product_mst sync
 import React, { useState, useEffect } from 'react';
 import {
   Container,
@@ -45,6 +45,7 @@ import {
   TrendingDown,
   Refresh,
   PhoneAndroid,
+  Category,
 } from '@mui/icons-material';
 import { AndroidDevice } from '@/domain/entities/AndroidDevice';
 import { DIContainer } from '@/application/services/DIContainer';
@@ -139,9 +140,14 @@ export const GetDataPage: React.FC<GetDataPageProps> = ({ connectedDevice }) => 
       const totalRecordsInserted = results.reduce((sum, result) => sum + result.recordsInserted, 0);
       const totalRecordsUpdated = results.reduce((sum, result) => sum + result.recordsUpdated, 0);
       const failedTables = results.filter(result => !result.success);
+      const productMstResult = results.find(result => result.tableName === 'product_mst');
 
       if (failedTables.length === 0) {
-        setSuccess(`Data synchronization completed successfully! ${totalRecordsInserted} records inserted, ${totalRecordsUpdated} records updated.`);
+        let successMessage = `Data synchronization completed successfully! ${totalRecordsInserted} records inserted, ${totalRecordsUpdated} records updated.`;
+        if (productMstResult && productMstResult.success) {
+          successMessage += ` Product box quantities synchronized from product master data.`;
+        }
+        setSuccess(successMessage);
       } else {
         setError(`Synchronization completed with ${failedTables.length} table(s) having errors. ${totalRecordsInserted} records inserted, ${totalRecordsUpdated} records updated.`);
       }
@@ -183,6 +189,8 @@ export const GetDataPage: React.FC<GetDataPageProps> = ({ connectedDevice }) => 
         return <TrendingUp sx={{ color: '#4caf50' }} />;
       case 'stockout_data':
         return <TrendingDown sx={{ color: '#f44336' }} />;
+      case 'product_mst':
+        return <Category sx={{ color: '#ff9800' }} />;
       default:
         return <Storage sx={{ color: '#757575' }} />;
     }
@@ -196,8 +204,25 @@ export const GetDataPage: React.FC<GetDataPageProps> = ({ connectedDevice }) => 
         return 'Stock In Data';
       case 'stockout_data':
         return 'Stock Out Data';
+      case 'product_mst':
+        return 'Product Master Data';
       default:
         return tableName;
+    }
+  };
+
+  const getTableDescription = (tableName: string): string => {
+    switch (tableName) {
+      case 'inventory_data':
+        return 'Physical inventory counts and discrepancies';
+      case 'stockin_data':
+        return 'Stock receipt and incoming inventory records';
+      case 'stockout_data':
+        return 'Stock issues and outgoing inventory records';
+      case 'product_mst':
+        return 'Product master data including box quantities';
+      default:
+        return 'Database synchronization';
     }
   };
 
@@ -209,7 +234,7 @@ export const GetDataPage: React.FC<GetDataPageProps> = ({ connectedDevice }) => 
             Get Data from Device
           </Typography>
           <Typography variant="body1" color="text.secondary" paragraph>
-            Synchronize data from the Android device database to your local database. This will retrieve all inventory, stock-in, and stock-out records from the device and merge them with your local data.
+            Synchronize data from the Android device database to your local database. This will retrieve all inventory, stock movement, and product master records from the device and merge them with your local data.
           </Typography>
 
           {/* Sync Progress */}
@@ -315,7 +340,7 @@ export const GetDataPage: React.FC<GetDataPageProps> = ({ connectedDevice }) => 
                     Data Synchronization
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
-                    Pull all data from the device database and synchronize with your local database. This operation will merge records and update existing data where necessary.
+                    Pull all data from the device database and synchronize with your local database. This operation will merge records, update existing data, and sync product box quantities from the master data.
                   </Typography>
                 </Box>
                 
@@ -365,6 +390,13 @@ export const GetDataPage: React.FC<GetDataPageProps> = ({ connectedDevice }) => 
                   icon={<TrendingDown />}
                 />
                 <Chip 
+                  label="Product Master" 
+                  size="small" 
+                  color="warning"
+                  variant="outlined"
+                  icon={<Category />}
+                />
+                <Chip 
                   label="Auto-merge with Local DB" 
                   size="small" 
                   color="info"
@@ -388,6 +420,7 @@ export const GetDataPage: React.FC<GetDataPageProps> = ({ connectedDevice }) => 
                     <TableHead>
                       <TableRow>
                         <TableCell>Table</TableCell>
+                        <TableCell>Description</TableCell>
                         <TableCell align="right">Records Found</TableCell>
                         <TableCell align="right">Inserted</TableCell>
                         <TableCell align="right">Updated</TableCell>
@@ -402,6 +435,11 @@ export const GetDataPage: React.FC<GetDataPageProps> = ({ connectedDevice }) => 
                               {getTableIcon(result.tableName)}
                               {getTableDisplayName(result.tableName)}
                             </Box>
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2" color="text.secondary">
+                              {getTableDescription(result.tableName)}
+                            </Typography>
                           </TableCell>
                           <TableCell align="right">{result.recordsFound}</TableCell>
                           <TableCell align="right">{result.recordsInserted}</TableCell>
@@ -448,23 +486,41 @@ export const GetDataPage: React.FC<GetDataPageProps> = ({ connectedDevice }) => 
               <ListItemIcon>
                 <Inventory color="primary" />
               </ListItemIcon>
-              <ListItemText primary="Inventory Data" />
+              <ListItemText 
+                primary="Inventory Data" 
+                secondary="Physical inventory counts and discrepancies"
+              />
             </ListItem>
             <ListItem>
               <ListItemIcon>
                 <TrendingUp color="success" />
               </ListItemIcon>
-              <ListItemText primary="Stock In Data" />
+              <ListItemText 
+                primary="Stock In Data" 
+                secondary="Stock receipt and incoming inventory records"
+              />
             </ListItem>
             <ListItem>
               <ListItemIcon>
                 <TrendingDown color="error" />
               </ListItemIcon>
-              <ListItemText primary="Stock Out Data" />
+              <ListItemText 
+                primary="Stock Out Data" 
+                secondary="Stock issues and outgoing inventory records"
+              />
+            </ListItem>
+            <ListItem>
+              <ListItemIcon>
+                <Category color="warning" />
+              </ListItemIcon>
+              <ListItemText 
+                primary="Product Master Data" 
+                secondary="Product information including box quantities"
+              />
             </ListItem>
           </List>
           <Alert severity="info" sx={{ mt: 2 }}>
-            Existing records will be updated if they already exist in your local database. New records will be inserted.
+            Existing records will be updated if they already exist in your local database. New records will be inserted. Product box quantities will be synchronized from the master data.
           </Alert>
         </DialogContent>
         <DialogActions>
