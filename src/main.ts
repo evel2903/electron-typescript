@@ -1,4 +1,4 @@
-// src/main.ts - Updated with data synchronization functionality
+// src/main.ts - Updated with service layer architecture
 import { app, BrowserWindow, ipcMain } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -8,33 +8,26 @@ import { SqliteService } from './infrastructure/services/SqliteService';
 import { FileParserService } from './infrastructure/services/FileParserService';
 import { DataSyncService } from './infrastructure/services/DataSyncService';
 import { MainSettingRepository } from './infrastructure/repositories/MainSettingRepository';
-import { ProductRepository } from './infrastructure/repositories/ProductRepository';
-import { LocationRepository } from './infrastructure/repositories/LocationRepository';
-import { StaffRepository } from './infrastructure/repositories/StaffRepository';
-import { SupplierRepository } from './infrastructure/repositories/SupplierRepository';
-import { InventoryDataRepository } from './infrastructure/repositories/InventoryDataRepository';
-import { StockinDataRepository } from './infrastructure/repositories/StockinDataRepository';
-import { StockoutDataRepository } from './infrastructure/repositories/StockoutDataRepository';
 import { SettingService } from './application/services/SettingService';
 import { DataImportService } from './application/services/DataImportService';
+import { DataService } from './application/services/DataService';
+import { DIContainer } from './application/services/DIContainer';
 
-// Initialize services in main process
+// Initialize core services for main process
 const adbService = new AdbService();
-const sqliteService = new SqliteService();
+const diContainer = DIContainer.getInstance();
+const sqliteService = diContainer.getSqliteService();
 const fileParserService = new FileParserService();
 const dataSyncService = new DataSyncService(adbService, sqliteService);
 
-// Initialize repositories
+// Initialize repositories through DI container
 const mainSettingRepository = new MainSettingRepository(sqliteService);
-const productRepository = new ProductRepository(sqliteService);
-const locationRepository = new LocationRepository(sqliteService);
-const staffRepository = new StaffRepository(sqliteService);
-const supplierRepository = new SupplierRepository(sqliteService);
-const inventoryDataRepository = new InventoryDataRepository(sqliteService);
-const stockinDataRepository = new StockinDataRepository(sqliteService);
-const stockoutDataRepository = new StockoutDataRepository(sqliteService);
+const productRepository = diContainer.getProductRepository();
+const locationRepository = diContainer.getLocationRepository();
+const staffRepository = diContainer.getStaffRepository();
+const supplierRepository = diContainer.getSupplierRepository();
 
-// Initialize services
+// Initialize services through DI container
 const settingService = new SettingService(mainSettingRepository);
 const dataImportService = new DataImportService(
     productRepository,
@@ -42,6 +35,7 @@ const dataImportService = new DataImportService(
     staffRepository,
     supplierRepository,
 );
+const dataService = diContainer.getDataService();
 
 function createWindow(): void {
     const mainWindow = new BrowserWindow({
@@ -64,7 +58,6 @@ function createWindow(): void {
     });
 
     mainWindow.setMenuBarVisibility(false);
-    // or alternatively:
     mainWindow.setMenu(null);
 
     // Open DevTools in development
@@ -75,7 +68,6 @@ function createWindow(): void {
 
 // Initialize database when app is ready
 app.whenReady().then(async () => {
-    // Initialize the database with all schemas
     try {
         await mainSettingRepository.initializeDatabase();
         console.log('Database initialized successfully');
@@ -96,7 +88,7 @@ app.whenReady().then(async () => {
 ipcMain.handle('fs:writeTemporaryFile', async (_, fileName: string, arrayBuffer: ArrayBuffer) => {
     try {
         const tempDir = os.tmpdir();
-        const sanitizedFileName = path.basename(fileName); // Security: prevent path traversal
+        const sanitizedFileName = path.basename(fileName);
         const tempPath = path.join(
             tempDir,
             `electron_transfer_${Date.now()}_${Math.random().toString(36).substring(7)}_${sanitizedFileName}`,
@@ -115,7 +107,6 @@ ipcMain.handle('fs:writeTemporaryFile', async (_, fileName: string, arrayBuffer:
 
 ipcMain.handle('fs:cleanupTemporaryFile', async (_, filePath: string) => {
     try {
-        // Security check: only allow cleanup of files in temp directory
         const tempDir = os.tmpdir();
         const normalizedPath = path.normalize(filePath);
         const normalizedTempDir = path.normalize(tempDir);
@@ -330,7 +321,6 @@ ipcMain.handle(
                 deviceId,
                 remoteDatabasePath,
                 (progress) => {
-                    // Send progress updates to renderer process
                     event.sender.send('dataSync:progress', progress);
                 },
             );
@@ -344,10 +334,10 @@ ipcMain.handle(
     },
 );
 
-// IPC Handlers for Data Query operations
+// IPC Handlers for Data Query operations - Now using DataService
 ipcMain.handle('data:getAllProducts', async () => {
     try {
-        return await productRepository.getAllProducts();
+        return await dataService.getProducts();
     } catch (error) {
         console.error('Error getting all products:', error);
         return [];
@@ -356,7 +346,7 @@ ipcMain.handle('data:getAllProducts', async () => {
 
 ipcMain.handle('data:getAllLocations', async () => {
     try {
-        return await locationRepository.getAllLocations();
+        return await dataService.getLocations();
     } catch (error) {
         console.error('Error getting all locations:', error);
         return [];
@@ -365,7 +355,7 @@ ipcMain.handle('data:getAllLocations', async () => {
 
 ipcMain.handle('data:getAllStaff', async () => {
     try {
-        return await staffRepository.getAllStaff();
+        return await dataService.getStaff();
     } catch (error) {
         console.error('Error getting all staff:', error);
         return [];
@@ -374,20 +364,16 @@ ipcMain.handle('data:getAllStaff', async () => {
 
 ipcMain.handle('data:getAllSuppliers', async () => {
     try {
-        return await supplierRepository.getAllSuppliers();
+        return await dataService.getSuppliers();
     } catch (error) {
         console.error('Error getting all suppliers:', error);
         return [];
     }
 });
 
-// IPC Handlers for Data Statistics operations
 ipcMain.handle('data:getInventoryDataCount', async () => {
     try {
-        const result = await sqliteService.get<{ count: number }>(
-            'SELECT COUNT(*) as count FROM inventory_data',
-        );
-        return result?.count || 0;
+        return await dataService.getInventoryDataCount();
     } catch (error) {
         console.error('Error getting inventory data count:', error);
         return 0;
@@ -396,10 +382,7 @@ ipcMain.handle('data:getInventoryDataCount', async () => {
 
 ipcMain.handle('data:getStockinDataCount', async () => {
     try {
-        const result = await sqliteService.get<{ count: number }>(
-            'SELECT COUNT(*) as count FROM stockin_data',
-        );
-        return result?.count || 0;
+        return await dataService.getStockinDataCount();
     } catch (error) {
         console.error('Error getting stockin data count:', error);
         return 0;
@@ -408,13 +391,42 @@ ipcMain.handle('data:getStockinDataCount', async () => {
 
 ipcMain.handle('data:getStockoutDataCount', async () => {
     try {
-        const result = await sqliteService.get<{ count: number }>(
-            'SELECT COUNT(*) as count FROM stockout_data',
-        );
-        return result?.count || 0;
+        return await dataService.getStockoutDataCount();
     } catch (error) {
         console.error('Error getting stockout data count:', error);
         return 0;
+    }
+});
+
+// New IPC Handlers for aggregated data operations using DataService
+ipcMain.handle('data:getDataCounts', async () => {
+    try {
+        return await dataService.getDataCounts();
+    } catch (error) {
+        console.error('Error getting data counts:', error);
+        return {
+            inventory: 0,
+            stockin: 0,
+            stockout: 0,
+            products: 0,
+            locations: 0,
+            staff: 0,
+            suppliers: 0,
+        };
+    }
+});
+
+ipcMain.handle('data:getAllMasterData', async () => {
+    try {
+        return await dataService.getAllMasterData();
+    } catch (error) {
+        console.error('Error getting all master data:', error);
+        return {
+            products: [],
+            locations: [],
+            staff: [],
+            suppliers: [],
+        };
     }
 });
 

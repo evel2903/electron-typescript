@@ -5,4 +5,5 @@ export interface IStockinDataRepository {
     bulkUpsert(
         stockinData: Omit<StockinData, 'id' | 'createdAt' | 'updatedAt'>[],
     ): Promise<{ inserted: number; updated: number }>;
+    getCount(): Promise<number>;
 }

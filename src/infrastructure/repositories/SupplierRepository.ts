@@ -16,80 +16,6 @@ export class SupplierRepository implements ISupplierRepository {
 
     constructor(private sqliteService: SqliteService) {}
 
-    async upsertSupplier(supplier: Omit<Supplier, 'createdAt' | 'updatedAt'>): Promise<Supplier> {
-        try {
-            const existingSupplier = await this.getSupplierByCode(supplier.supplierCode);
-
-            if (existingSupplier) {
-                await this.sqliteService.run(
-                    'UPDATE supplier SET supplier_name = ?, updated_at = CURRENT_TIMESTAMP WHERE supplier_code = ?',
-                    [supplier.supplierName, supplier.supplierCode],
-                );
-            } else {
-                await this.sqliteService.run(
-                    'INSERT INTO supplier (supplier_code, supplier_name) VALUES (?, ?)',
-                    [supplier.supplierCode, supplier.supplierName],
-                );
-            }
-
-            const updatedSupplier = await this.getSupplierByCode(supplier.supplierCode);
-            if (!updatedSupplier) {
-                throw new Error(`Failed to retrieve upserted supplier: ${supplier.supplierCode}`);
-            }
-
-            return updatedSupplier;
-        } catch (error) {
-            this.logger.error(
-                `Failed to upsert supplier ${supplier.supplierCode}:`,
-                error as Error,
-            );
-            throw error;
-        }
-    }
-
-    async getSupplierByCode(supplierCode: string): Promise<Supplier | null> {
-        try {
-            const row = await this.sqliteService.get<DatabaseSupplier>(
-                'SELECT * FROM supplier WHERE supplier_code = ?',
-                [supplierCode],
-            );
-
-            if (!row) {
-                return null;
-            }
-
-            return this.mapDatabaseSupplierToEntity(row);
-        } catch (error) {
-            this.logger.error(`Failed to get supplier ${supplierCode}:`, error as Error);
-            return null;
-        }
-    }
-
-    async getAllSuppliers(): Promise<Supplier[]> {
-        try {
-            const rows = await this.sqliteService.all<DatabaseSupplier>(
-                'SELECT * FROM supplier ORDER BY supplier_name',
-            );
-
-            return rows.map((row) => this.mapDatabaseSupplierToEntity(row));
-        } catch (error) {
-            this.logger.error('Failed to get all suppliers:', error as Error);
-            return [];
-        }
-    }
-
-    async deleteSupplier(supplierCode: string): Promise<boolean> {
-        try {
-            await this.sqliteService.run('DELETE FROM supplier WHERE supplier_code = ?', [
-                supplierCode,
-            ]);
-            return true;
-        } catch (error) {
-            this.logger.error(`Failed to delete supplier ${supplierCode}:`, error as Error);
-            return false;
-        }
-    }
-
     async bulkUpsert(
         suppliers: Omit<Supplier, 'createdAt' | 'updatedAt'>[],
     ): Promise<{ inserted: number; updated: number }> {
@@ -119,6 +45,49 @@ export class SupplierRepository implements ISupplierRepository {
         } catch (error) {
             this.logger.error('Failed to bulk upsert suppliers:', error as Error);
             throw error;
+        }
+    }
+
+    async getAll(): Promise<Supplier[]> {
+        try {
+            const rows = await this.sqliteService.all<DatabaseSupplier>(
+                'SELECT * FROM supplier ORDER BY supplier_name',
+            );
+
+            return rows.map((row) => this.mapDatabaseSupplierToEntity(row));
+        } catch (error) {
+            this.logger.error('Failed to get all suppliers:', error as Error);
+            return [];
+        }
+    }
+
+    async getCount(): Promise<number> {
+        try {
+            const result = await this.sqliteService.get<{ count: number }>(
+                'SELECT COUNT(*) as count FROM supplier',
+            );
+            return result?.count || 0;
+        } catch (error) {
+            this.logger.error('Failed to get supplier count:', error as Error);
+            return 0;
+        }
+    }
+
+    private async getSupplierByCode(supplierCode: string): Promise<Supplier | null> {
+        try {
+            const row = await this.sqliteService.get<DatabaseSupplier>(
+                'SELECT * FROM supplier WHERE supplier_code = ?',
+                [supplierCode],
+            );
+
+            if (!row) {
+                return null;
+            }
+
+            return this.mapDatabaseSupplierToEntity(row);
+        } catch (error) {
+            this.logger.error(`Failed to get supplier ${supplierCode}:`, error as Error);
+            return null;
         }
     }
 

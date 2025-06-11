@@ -5,4 +5,5 @@ export interface IInventoryDataRepository {
     bulkUpsert(
         inventoryData: Omit<InventoryData, 'id' | 'createdAt' | 'updatedAt'>[],
     ): Promise<{ inserted: number; updated: number }>;
+    getCount(): Promise<number>;
 }

@@ -37,7 +37,6 @@ export class InventoryDataRepository implements IInventoryDataRepository {
 
         try {
             for (const inventory of inventoryData) {
-                // Check if record exists based on unique combination of fields
                 const existing = await this.findExistingRecord(inventory);
 
                 if (existing) {
@@ -105,11 +104,22 @@ export class InventoryDataRepository implements IInventoryDataRepository {
         }
     }
 
+    async getCount(): Promise<number> {
+        try {
+            const result = await this.sqliteService.get<{ count: number }>(
+                'SELECT COUNT(*) as count FROM inventory_data',
+            );
+            return result?.count || 0;
+        } catch (error) {
+            this.logger.error('Failed to get inventory data count:', error as Error);
+            return 0;
+        }
+    }
+
     private async findExistingRecord(
         inventory: Omit<InventoryData, 'id' | 'createdAt' | 'updatedAt'>,
     ): Promise<DatabaseInventoryData | null> {
         try {
-            // Find existing record based on business logic - adjust this query based on your uniqueness requirements
             const row = await this.sqliteService.get<DatabaseInventoryData>(
                 `SELECT * FROM inventory_data 
          WHERE staff_code = ? AND shop_code = ? AND shelf_number = ? AND shelf_position = ? 

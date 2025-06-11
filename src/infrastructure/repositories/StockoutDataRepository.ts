@@ -39,7 +39,6 @@ export class StockoutDataRepository implements IStockoutDataRepository {
 
         try {
             for (const stockout of stockoutData) {
-                // Check if record exists based on unique combination of fields
                 const existing = await this.findExistingRecord(stockout);
 
                 if (existing) {
@@ -111,11 +110,22 @@ export class StockoutDataRepository implements IStockoutDataRepository {
         }
     }
 
+    async getCount(): Promise<number> {
+        try {
+            const result = await this.sqliteService.get<{ count: number }>(
+                'SELECT COUNT(*) as count FROM stockout_data',
+            );
+            return result?.count || 0;
+        } catch (error) {
+            this.logger.error('Failed to get stockout data count:', error as Error);
+            return 0;
+        }
+    }
+
     private async findExistingRecord(
         stockout: Omit<StockoutData, 'id' | 'createdAt' | 'updatedAt'>,
     ): Promise<DatabaseStockoutData | null> {
         try {
-            // Find existing record based on business logic - slip number and product code combination
             const row = await this.sqliteService.get<DatabaseStockoutData>(
                 `SELECT * FROM stockout_data 
          WHERE slip_number = ? AND product_code = ? AND input_date = ? AND shop_code = ?`,

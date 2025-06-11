@@ -18,85 +18,6 @@ export class ProductRepository implements IProductRepository {
 
     constructor(private sqliteService: SqliteService) {}
 
-    async upsertProduct(product: Omit<Product, 'createdAt' | 'updatedAt'>): Promise<Product> {
-        try {
-            const existingProduct = await this.getProductByCode(product.janCode);
-
-            if (existingProduct) {
-                await this.sqliteService.run(
-                    'UPDATE product SET product_name = ?, box_quantity = ?, supplier_code = ?, updated_at = CURRENT_TIMESTAMP WHERE jan_code = ?',
-                    [
-                        product.productName,
-                        product.boxQuantity,
-                        product.supplierCode,
-                        product.janCode,
-                    ],
-                );
-            } else {
-                await this.sqliteService.run(
-                    'INSERT INTO product (jan_code, product_name, box_quantity, supplier_code) VALUES (?, ?, ?, ?)',
-                    [
-                        product.janCode,
-                        product.productName,
-                        product.boxQuantity,
-                        product.supplierCode,
-                    ],
-                );
-            }
-
-            const updatedProduct = await this.getProductByCode(product.janCode);
-            if (!updatedProduct) {
-                throw new Error(`Failed to retrieve upserted product: ${product.janCode}`);
-            }
-
-            return updatedProduct;
-        } catch (error) {
-            this.logger.error(`Failed to upsert product ${product.janCode}:`, error as Error);
-            throw error;
-        }
-    }
-
-    async getProductByCode(janCode: string): Promise<Product | null> {
-        try {
-            const row = await this.sqliteService.get<DatabaseProduct>(
-                'SELECT * FROM product WHERE jan_code = ?',
-                [janCode],
-            );
-
-            if (!row) {
-                return null;
-            }
-
-            return this.mapDatabaseProductToEntity(row);
-        } catch (error) {
-            this.logger.error(`Failed to get product ${janCode}:`, error as Error);
-            return null;
-        }
-    }
-
-    async getAllProducts(): Promise<Product[]> {
-        try {
-            const rows = await this.sqliteService.all<DatabaseProduct>(
-                'SELECT * FROM product ORDER BY product_name',
-            );
-
-            return rows.map((row) => this.mapDatabaseProductToEntity(row));
-        } catch (error) {
-            this.logger.error('Failed to get all products:', error as Error);
-            return [];
-        }
-    }
-
-    async deleteProduct(janCode: string): Promise<boolean> {
-        try {
-            await this.sqliteService.run('DELETE FROM product WHERE jan_code = ?', [janCode]);
-            return true;
-        } catch (error) {
-            this.logger.error(`Failed to delete product ${janCode}:`, error as Error);
-            return false;
-        }
-    }
-
     async bulkUpsert(
         products: Omit<Product, 'createdAt' | 'updatedAt'>[],
     ): Promise<{ inserted: number; updated: number }> {
@@ -136,6 +57,49 @@ export class ProductRepository implements IProductRepository {
         } catch (error) {
             this.logger.error('Failed to bulk upsert products:', error as Error);
             throw error;
+        }
+    }
+
+    async getAll(): Promise<Product[]> {
+        try {
+            const rows = await this.sqliteService.all<DatabaseProduct>(
+                'SELECT * FROM product ORDER BY product_name',
+            );
+
+            return rows.map((row) => this.mapDatabaseProductToEntity(row));
+        } catch (error) {
+            this.logger.error('Failed to get all products:', error as Error);
+            return [];
+        }
+    }
+
+    async getCount(): Promise<number> {
+        try {
+            const result = await this.sqliteService.get<{ count: number }>(
+                'SELECT COUNT(*) as count FROM product',
+            );
+            return result?.count || 0;
+        } catch (error) {
+            this.logger.error('Failed to get product count:', error as Error);
+            return 0;
+        }
+    }
+
+    private async getProductByCode(janCode: string): Promise<Product | null> {
+        try {
+            const row = await this.sqliteService.get<DatabaseProduct>(
+                'SELECT * FROM product WHERE jan_code = ?',
+                [janCode],
+            );
+
+            if (!row) {
+                return null;
+            }
+
+            return this.mapDatabaseProductToEntity(row);
+        } catch (error) {
+            this.logger.error(`Failed to get product ${janCode}:`, error as Error);
+            return null;
         }
     }
 

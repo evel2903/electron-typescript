@@ -16,75 +16,6 @@ export class LocationRepository implements ILocationRepository {
 
     constructor(private sqliteService: SqliteService) {}
 
-    async upsertLocation(location: Omit<Location, 'createdAt' | 'updatedAt'>): Promise<Location> {
-        try {
-            const existingLocation = await this.getLocationByCode(location.shopCode);
-
-            if (existingLocation) {
-                await this.sqliteService.run(
-                    'UPDATE location SET shop_name = ?, updated_at = CURRENT_TIMESTAMP WHERE shop_code = ?',
-                    [location.shopName, location.shopCode],
-                );
-            } else {
-                await this.sqliteService.run(
-                    'INSERT INTO location (shop_code, shop_name) VALUES (?, ?)',
-                    [location.shopCode, location.shopName],
-                );
-            }
-
-            const updatedLocation = await this.getLocationByCode(location.shopCode);
-            if (!updatedLocation) {
-                throw new Error(`Failed to retrieve upserted location: ${location.shopCode}`);
-            }
-
-            return updatedLocation;
-        } catch (error) {
-            this.logger.error(`Failed to upsert location ${location.shopCode}:`, error as Error);
-            throw error;
-        }
-    }
-
-    async getLocationByCode(shopCode: string): Promise<Location | null> {
-        try {
-            const row = await this.sqliteService.get<DatabaseLocation>(
-                'SELECT * FROM location WHERE shop_code = ?',
-                [shopCode],
-            );
-
-            if (!row) {
-                return null;
-            }
-
-            return this.mapDatabaseLocationToEntity(row);
-        } catch (error) {
-            this.logger.error(`Failed to get location ${shopCode}:`, error as Error);
-            return null;
-        }
-    }
-
-    async getAllLocations(): Promise<Location[]> {
-        try {
-            const rows = await this.sqliteService.all<DatabaseLocation>(
-                'SELECT * FROM location ORDER BY shop_name',
-            );
-
-            return rows.map((row) => this.mapDatabaseLocationToEntity(row));
-        } catch (error) {
-            this.logger.error('Failed to get all locations:', error as Error);
-            return [];
-        }
-    }
-
-    async deleteLocation(shopCode: string): Promise<boolean> {
-        try {
-            await this.sqliteService.run('DELETE FROM location WHERE shop_code = ?', [shopCode]);
-            return true;
-        } catch (error) {
-            this.logger.error(`Failed to delete location ${shopCode}:`, error as Error);
-            return false;
-        }
-    }
-
     async bulkUpsert(
         locations: Omit<Location, 'createdAt' | 'updatedAt'>[],
     ): Promise<{ inserted: number; updated: number }> {
@@ -114,6 +45,49 @@ export class LocationRepository implements ILocationRepository {
         } catch (error) {
             this.logger.error('Failed to bulk upsert locations:', error as Error);
             throw error;
+        }
+    }
+
+    async getAll(): Promise<Location[]> {
+        try {
+            const rows = await this.sqliteService.all<DatabaseLocation>(
+                'SELECT * FROM location ORDER BY shop_name',
+            );
+
+            return rows.map((row) => this.mapDatabaseLocationToEntity(row));
+        } catch (error) {
+            this.logger.error('Failed to get all locations:', error as Error);
+            return [];
+        }
+    }
+
+    async getCount(): Promise<number> {
+        try {
+            const result = await this.sqliteService.get<{ count: number }>(
+                'SELECT COUNT(*) as count FROM location',
+            );
+            return result?.count || 0;
+        } catch (error) {
+            this.logger.error('Failed to get location count:', error as Error);
+            return 0;
+        }
+    }
+
+    private async getLocationByCode(shopCode: string): Promise<Location | null> {
+        try {
+            const row = await this.sqliteService.get<DatabaseLocation>(
+                'SELECT * FROM location WHERE shop_code = ?',
+                [shopCode],
+            );
+
+            if (!row) {
+                return null;
+            }
+
+            return this.mapDatabaseLocationToEntity(row);
+        } catch (error) {
+            this.logger.error(`Failed to get location ${shopCode}:`, error as Error);
+            return null;
         }
     }
 

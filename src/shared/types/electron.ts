@@ -1,4 +1,4 @@
-// src/shared/types/electron.ts - Updated with data synchronization types
+// src/shared/types/electron.ts - Updated with service layer architecture
 import { AndroidDevice } from '@/domain/entities/AndroidDevice';
 import { DeviceFile } from '@/domain/entities/DeviceFile';
 import { FileTransferResult } from '@/domain/entities/FileTransferResult';
@@ -10,6 +10,7 @@ import { Staff } from '@/domain/entities/Staff';
 import { Supplier } from '@/domain/entities/Supplier';
 import { ImportResult } from '@/domain/entities/ImportResult';
 import { FileParseResult, ImportFileType } from '@/application/services/DataImportService';
+import { DataCounts, AllData } from '@/application/services/DataService';
 
 export interface SyncResult {
     tableName: string;
@@ -43,6 +44,7 @@ export interface ElectronAPI {
         cleanupTemporaryFile(filePath: string): Promise<boolean>;
     };
 
+    // Android Debug Bridge operations
     adb: {
         isAvailable(): Promise<boolean>;
         listDevices(): Promise<AndroidDevice[]>;
@@ -63,6 +65,7 @@ export interface ElectronAPI {
         deleteFile(deviceId: string, path: string): Promise<boolean>;
     };
 
+    // Settings management operations
     settings: {
         initialize(): Promise<boolean>;
         getSetting(key: SettingKey): Promise<Setting | null>;
@@ -71,14 +74,14 @@ export interface ElectronAPI {
         deleteSetting(key: SettingKey): Promise<boolean>;
     };
 
-    // Data Import APIs
+    // Data Import operations
     import: {
         parseFile(filePath: string): Promise<FileParseResult>;
         importData(csvData: any[], fileType: ImportFileType): Promise<ImportResult>;
         detectFileType(headers: string[]): Promise<ImportFileType | null>;
     };
 
-    // Data Synchronization APIs
+    // Data Synchronization operations
     dataSync: {
         syncFromDevice(
             deviceId: string,
@@ -87,15 +90,22 @@ export interface ElectronAPI {
         ): Promise<SyncResult[]>;
     };
 
-    // Data Query APIs
+    // Data Query operations - Updated to use service layer
     data: {
+        // Individual entity access
         getAllProducts(): Promise<Product[]>;
         getAllLocations(): Promise<Location[]>;
         getAllStaff(): Promise<Staff[]>;
         getAllSuppliers(): Promise<Supplier[]>;
+        
+        // Individual count access
         getInventoryDataCount(): Promise<number>;
         getStockinDataCount(): Promise<number>;
         getStockoutDataCount(): Promise<number>;
+        
+        // Aggregated service operations
+        getDataCounts(): Promise<DataCounts>;
+        getAllMasterData(): Promise<AllData>;
     };
 }
 

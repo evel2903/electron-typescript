@@ -16,75 +16,6 @@ export class StaffRepository implements IStaffRepository {
 
     constructor(private sqliteService: SqliteService) {}
 
-    async upsertStaff(staff: Omit<Staff, 'createdAt' | 'updatedAt'>): Promise<Staff> {
-        try {
-            const existingStaff = await this.getStaffByCode(staff.staffCode);
-
-            if (existingStaff) {
-                await this.sqliteService.run(
-                    'UPDATE staff SET staff_name = ?, updated_at = CURRENT_TIMESTAMP WHERE staff_code = ?',
-                    [staff.staffName, staff.staffCode],
-                );
-            } else {
-                await this.sqliteService.run(
-                    'INSERT INTO staff (staff_code, staff_name) VALUES (?, ?)',
-                    [staff.staffCode, staff.staffName],
-                );
-            }
-
-            const updatedStaff = await this.getStaffByCode(staff.staffCode);
-            if (!updatedStaff) {
-                throw new Error(`Failed to retrieve upserted staff: ${staff.staffCode}`);
-            }
-
-            return updatedStaff;
-        } catch (error) {
-            this.logger.error(`Failed to upsert staff ${staff.staffCode}:`, error as Error);
-            throw error;
-        }
-    }
-
-    async getStaffByCode(staffCode: string): Promise<Staff | null> {
-        try {
-            const row = await this.sqliteService.get<DatabaseStaff>(
-                'SELECT * FROM staff WHERE staff_code = ?',
-                [staffCode],
-            );
-
-            if (!row) {
-                return null;
-            }
-
-            return this.mapDatabaseStaffToEntity(row);
-        } catch (error) {
-            this.logger.error(`Failed to get staff ${staffCode}:`, error as Error);
-            return null;
-        }
-    }
-
-    async getAllStaff(): Promise<Staff[]> {
-        try {
-            const rows = await this.sqliteService.all<DatabaseStaff>(
-                'SELECT * FROM staff ORDER BY staff_name',
-            );
-
-            return rows.map((row) => this.mapDatabaseStaffToEntity(row));
-        } catch (error) {
-            this.logger.error('Failed to get all staff:', error as Error);
-            return [];
-        }
-    }
-
-    async deleteStaff(staffCode: string): Promise<boolean> {
-        try {
-            await this.sqliteService.run('DELETE FROM staff WHERE staff_code = ?', [staffCode]);
-            return true;
-        } catch (error) {
-            this.logger.error(`Failed to delete staff ${staffCode}:`, error as Error);
-            return false;
-        }
-    }
-
     async bulkUpsert(
         staff: Omit<Staff, 'createdAt' | 'updatedAt'>[],
     ): Promise<{ inserted: number; updated: number }> {
@@ -114,6 +45,49 @@ export class StaffRepository implements IStaffRepository {
         } catch (error) {
             this.logger.error('Failed to bulk upsert staff:', error as Error);
             throw error;
+        }
+    }
+
+    async getAll(): Promise<Staff[]> {
+        try {
+            const rows = await this.sqliteService.all<DatabaseStaff>(
+                'SELECT * FROM staff ORDER BY staff_name',
+            );
+
+            return rows.map((row) => this.mapDatabaseStaffToEntity(row));
+        } catch (error) {
+            this.logger.error('Failed to get all staff:', error as Error);
+            return [];
+        }
+    }
+
+    async getCount(): Promise<number> {
+        try {
+            const result = await this.sqliteService.get<{ count: number }>(
+                'SELECT COUNT(*) as count FROM staff',
+            );
+            return result?.count || 0;
+        } catch (error) {
+            this.logger.error('Failed to get staff count:', error as Error);
+            return 0;
+        }
+    }
+
+    private async getStaffByCode(staffCode: string): Promise<Staff | null> {
+        try {
+            const row = await this.sqliteService.get<DatabaseStaff>(
+                'SELECT * FROM staff WHERE staff_code = ?',
+                [staffCode],
+            );
+
+            if (!row) {
+                return null;
+            }
+
+            return this.mapDatabaseStaffToEntity(row);
+        } catch (error) {
+            this.logger.error(`Failed to get staff ${staffCode}:`, error as Error);
+            return null;
         }
     }
 
