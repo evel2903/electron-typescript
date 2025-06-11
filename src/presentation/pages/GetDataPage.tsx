@@ -243,71 +243,71 @@ export const GetDataPage: React.FC<GetDataPageProps> = ({ connectedDevice }) => 
             </Card>
           )}
 
-          {/* Device Status and Configuration */}
-          <Grid container spacing={3} sx={{ mb: 3 }}>
-            <Grid item xs={12} md={6}>
-              <Card>
-                <CardContent>
-                  <Box display="flex" alignItems="center" gap={2} mb={2}>
-                    <PhoneAndroid sx={{ color: connectedDevice ? 'success.main' : 'error.main' }} />
-                    <Typography variant="h6">
+          {/* Device Status and Database Configuration - Merged */}
+          <Card sx={{ mb: 3 }}>
+            <CardContent>
+              <Box display="flex" alignItems="center" gap={2} mb={3}>
+                <PhoneAndroid sx={{ color: connectedDevice ? 'success.main' : 'error.main' }} />
+                <Storage sx={{ color: 'primary.main' }} />
+                <Typography variant="h6">
+                  Connection and Configuration
+                </Typography>
+              </Box>
+              
+              <Grid container spacing={3}>
+                <Grid item xs={12} md={4}>
+                  <Box>
+                    <Typography variant="subtitle1" color="text.primary" gutterBottom>
                       Device Status
                     </Typography>
+                    {connectedDevice ? (
+                      <Box>
+                        <Typography variant="body2" color="text.secondary">
+                          Connected: {connectedDevice.model || connectedDevice.serialNumber}
+                        </Typography>
+                        <Chip 
+                          label="Ready" 
+                          size="small" 
+                          color="success"
+                          sx={{ mt: 1 }}
+                        />
+                      </Box>
+                    ) : (
+                      <Box>
+                        <Typography variant="body2" color="text.secondary">
+                          No device connected
+                        </Typography>
+                        <Chip 
+                          label="Not Ready" 
+                          size="small" 
+                          color="error"
+                          sx={{ mt: 1 }}
+                        />
+                      </Box>
+                    )}
                   </Box>
-                  
-                  {connectedDevice ? (
-                    <Box>
-                      <Typography variant="body2" color="text.secondary">
-                        Connected: {connectedDevice.model || connectedDevice.serialNumber}
-                      </Typography>
-                      <Chip 
-                        label="Ready" 
-                        size="small" 
-                        color="success"
-                        sx={{ mt: 1 }}
-                      />
-                    </Box>
-                  ) : (
-                    <Box>
-                      <Typography variant="body2" color="text.secondary">
-                        No device connected
-                      </Typography>
-                      <Chip 
-                        label="Not Ready" 
-                        size="small" 
-                        color="error"
-                        sx={{ mt: 1 }}
-                      />
-                    </Box>
-                  )}
-                </CardContent>
-              </Card>
-            </Grid>
+                </Grid>
 
-            <Grid item xs={12} md={6}>
-              <Card>
-                <CardContent>
-                  <Box display="flex" alignItems="center" gap={2} mb={2}>
-                    <Storage sx={{ color: 'primary.main' }} />
-                    <Typography variant="h6">
+                <Grid item xs={12} md={8}>
+                  <Box>
+                    <Typography variant="subtitle1" color="text.primary" gutterBottom>
                       Database Configuration
                     </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Source Database: {databasePath}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                      Target: Local SQLite Database
+                    </Typography>
                   </Box>
-                  
-                  <Typography variant="body2" color="text.secondary">
-                    Source Database: {databasePath}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                    Target: Local SQLite Database
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-          </Grid>
+                </Grid>
+              </Grid>
+            </CardContent>
+          </Card>
 
           
           {/* Action Card */}
-          <Card>
+          <Card  sx={{ mb: 3 }}>
             <CardContent>
               <Box display="flex" alignItems="center" justifyContent="space-between" flexWrap="wrap" gap={2}>
                 <Box>
@@ -376,7 +376,7 @@ export const GetDataPage: React.FC<GetDataPageProps> = ({ connectedDevice }) => 
 
           {/* Sync Results */}
           {syncResults.length > 0 && (
-            <Card sx={{ mb: 3 }}>
+            <Card>
               <CardContent>
                 <Typography variant="h6" gutterBottom>
                   Synchronization Results
@@ -431,7 +431,7 @@ export const GetDataPage: React.FC<GetDataPageProps> = ({ connectedDevice }) => 
       </Container>
 
       {/* Confirmation Dialog */}
-      <Dialog open={confirmDialogOpen} onClose={handleCancelSync} maxWidth="sm" fullWidth>
+      <Dialog open={confirmDialogOpen} onClose={handleCancelSync} maxWidth="md" fullWidth>
         <DialogTitle>Confirm Data Synchronization</DialogTitle>
         <DialogContent>
           <Typography variant="body1" paragraph>
