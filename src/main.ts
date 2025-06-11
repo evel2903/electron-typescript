@@ -1,33 +1,31 @@
-// src/main.ts - Updated with service layer architecture
+// src/main.ts - Corrected with MainProcessDIContainer
 import { app, BrowserWindow, ipcMain } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
 import { AdbService } from './infrastructure/services/AdbService';
-import { SqliteService } from './infrastructure/services/SqliteService';
 import { FileParserService } from './infrastructure/services/FileParserService';
 import { DataSyncService } from './infrastructure/services/DataSyncService';
 import { MainSettingRepository } from './infrastructure/repositories/MainSettingRepository';
 import { SettingService } from './application/services/SettingService';
 import { DataImportService } from './application/services/DataImportService';
-import { DataService } from './application/services/DataService';
-import { DIContainer } from './application/services/DIContainer';
+import { MainProcessDIContainer } from './application/services/MainProcessDIContainer';
 
 // Initialize core services for main process
 const adbService = new AdbService();
-const diContainer = DIContainer.getInstance();
-const sqliteService = diContainer.getSqliteService();
+const mainDIContainer = MainProcessDIContainer.getInstance();
+const sqliteService = mainDIContainer.getSqliteService();
 const fileParserService = new FileParserService();
 const dataSyncService = new DataSyncService(adbService, sqliteService);
 
-// Initialize repositories through DI container
+// Initialize repositories through main process DI container
 const mainSettingRepository = new MainSettingRepository(sqliteService);
-const productRepository = diContainer.getProductRepository();
-const locationRepository = diContainer.getLocationRepository();
-const staffRepository = diContainer.getStaffRepository();
-const supplierRepository = diContainer.getSupplierRepository();
+const productRepository = mainDIContainer.getProductRepository();
+const locationRepository = mainDIContainer.getLocationRepository();
+const staffRepository = mainDIContainer.getStaffRepository();
+const supplierRepository = mainDIContainer.getSupplierRepository();
 
-// Initialize services through DI container
+// Initialize services through main process DI container
 const settingService = new SettingService(mainSettingRepository);
 const dataImportService = new DataImportService(
     productRepository,
@@ -35,7 +33,7 @@ const dataImportService = new DataImportService(
     staffRepository,
     supplierRepository,
 );
-const dataService = diContainer.getDataService();
+const dataService = mainDIContainer.getDataService();
 
 function createWindow(): void {
     const mainWindow = new BrowserWindow({
@@ -69,10 +67,19 @@ function createWindow(): void {
 // Initialize database when app is ready
 app.whenReady().then(async () => {
     try {
+        // Initialize the main process DI container and database
+        const initialized = await mainDIContainer.initialize();
+        if (initialized) {
+            console.log('Main process and database initialized successfully');
+        } else {
+            console.error('Failed to initialize main process');
+        }
+
+        // Also initialize settings database
         await mainSettingRepository.initializeDatabase();
-        console.log('Database initialized successfully');
+        console.log('Settings database initialized successfully');
     } catch (error) {
-        console.error('Failed to initialize database:', error);
+        console.error('Failed to initialize application:', error);
     }
 
     createWindow();
@@ -82,6 +89,15 @@ app.whenReady().then(async () => {
             createWindow();
         }
     });
+});
+
+// Cleanup when app is quitting
+app.on('before-quit', async () => {
+    try {
+        await mainDIContainer.cleanup();
+    } catch (error) {
+        console.error('Error during application cleanup:', error);
+    }
 });
 
 // IPC Handlers for File System operations
@@ -334,7 +350,7 @@ ipcMain.handle(
     },
 );
 
-// IPC Handlers for Data Query operations - Now using DataService
+// IPC Handlers for Data Query operations - Using DataService from main process DI container
 ipcMain.handle('data:getAllProducts', async () => {
     try {
         return await dataService.getProducts();

@@ -1,38 +1,23 @@
-// src/application/services/DIContainer.ts - Updated for service layer architecture
+// src/application/services/DIContainer.ts - Final Renderer Process version (Presentation Layer)
 import { AppService } from './AppService';
 import { AndroidDeviceService } from './AndroidDeviceService';
 import { SettingService } from './SettingService';
-import { DataService } from './DataService';
 import { UserRepository } from '@/infrastructure/repositories/UserRepository';
 import { AppInfoRepository } from '@/infrastructure/repositories/AppInfoRepository';
 import { AndroidDeviceRepository } from '@/infrastructure/repositories/AndroidDeviceRepository';
 import { SettingRepository } from '@/infrastructure/repositories/SettingRepository';
-import { ProductRepository } from '@/infrastructure/repositories/ProductRepository';
-import { LocationRepository } from '@/infrastructure/repositories/LocationRepository';
-import { StaffRepository } from '@/infrastructure/repositories/StaffRepository';
-import { SupplierRepository } from '@/infrastructure/repositories/SupplierRepository';
-import { InventoryDataRepository } from '@/infrastructure/repositories/InventoryDataRepository';
-import { StockinDataRepository } from '@/infrastructure/repositories/StockinDataRepository';
-import { StockoutDataRepository } from '@/infrastructure/repositories/StockoutDataRepository';
-import { SqliteService } from '@/infrastructure/services/SqliteService';
 import { IElectronAPI } from '../interfaces/IElectronAPI';
 
+/**
+ * Dependency Injection Container for the Renderer Process
+ * This container provides services that are appropriate for the renderer process.
+ * Data operations should use window.electronAPI.data.* instead of direct repository access.
+ */
 export class DIContainer {
     private static instance: DIContainer;
     private appService: AppService | null = null;
     private androidDeviceService: AndroidDeviceService | null = null;
     private settingService: SettingService | null = null;
-    private dataService: DataService | null = null;
-
-    // Repository instances for the main process
-    private sqliteService: SqliteService | null = null;
-    private productRepository: ProductRepository | null = null;
-    private locationRepository: LocationRepository | null = null;
-    private staffRepository: StaffRepository | null = null;
-    private supplierRepository: SupplierRepository | null = null;
-    private inventoryDataRepository: InventoryDataRepository | null = null;
-    private stockinDataRepository: StockinDataRepository | null = null;
-    private stockoutDataRepository: StockoutDataRepository | null = null;
 
     private constructor() {}
 
@@ -43,6 +28,10 @@ export class DIContainer {
         return DIContainer.instance;
     }
 
+    /**
+     * Get App Service for general application information
+     * Uses IPC-based repositories for renderer process
+     */
     getAppService(electronAPI?: IElectronAPI): AppService {
         if (!this.appService) {
             const userRepository = new UserRepository();
@@ -52,156 +41,177 @@ export class DIContainer {
         return this.appService;
     }
 
+    /**
+     * Get Android Device Service for device operations
+     * Uses IPC-based repository for renderer process
+     */
     getAndroidDeviceService(): AndroidDeviceService {
         if (!this.androidDeviceService) {
+            // AndroidDeviceRepository uses IPC to communicate with main process
             const androidDeviceRepository = new AndroidDeviceRepository();
             this.androidDeviceService = new AndroidDeviceService(androidDeviceRepository);
         }
         return this.androidDeviceService;
     }
 
+    /**
+     * Get Setting Service for application settings
+     * Uses IPC-based repository for renderer process
+     */
     getSettingService(): SettingService {
         if (!this.settingService) {
+            // SettingRepository uses IPC to communicate with main process
             const settingRepository = new SettingRepository();
             this.settingService = new SettingService(settingRepository);
         }
         return this.settingService;
     }
 
-    getDataService(): DataService {
-        if (!this.dataService) {
-            // Get or create SqliteService for main process
-            if (!this.sqliteService) {
-                this.sqliteService = new SqliteService();
-            }
-
-            // Create repository instances
-            if (!this.inventoryDataRepository) {
-                this.inventoryDataRepository = new InventoryDataRepository(this.sqliteService);
-            }
-            if (!this.stockinDataRepository) {
-                this.stockinDataRepository = new StockinDataRepository(this.sqliteService);
-            }
-            if (!this.stockoutDataRepository) {
-                this.stockoutDataRepository = new StockoutDataRepository(this.sqliteService);
-            }
-            if (!this.productRepository) {
-                this.productRepository = new ProductRepository(this.sqliteService);
-            }
-            if (!this.locationRepository) {
-                this.locationRepository = new LocationRepository(this.sqliteService);
-            }
-            if (!this.staffRepository) {
-                this.staffRepository = new StaffRepository(this.sqliteService);
-            }
-            if (!this.supplierRepository) {
-                this.supplierRepository = new SupplierRepository(this.sqliteService);
-            }
-
-            // Create DataService with all required repositories
-            this.dataService = new DataService(
-                this.inventoryDataRepository,
-                this.stockinDataRepository,
-                this.stockoutDataRepository,
-                this.productRepository,
-                this.locationRepository,
-                this.staffRepository,
-                this.supplierRepository,
-            );
-        }
-        return this.dataService;
-    }
-
-    // Method to get individual repositories for main process services
-    getProductRepository(): ProductRepository {
-        if (!this.productRepository) {
-            if (!this.sqliteService) {
-                this.sqliteService = new SqliteService();
-            }
-            this.productRepository = new ProductRepository(this.sqliteService);
-        }
-        return this.productRepository;
-    }
-
-    getLocationRepository(): LocationRepository {
-        if (!this.locationRepository) {
-            if (!this.sqliteService) {
-                this.sqliteService = new SqliteService();
-            }
-            this.locationRepository = new LocationRepository(this.sqliteService);
-        }
-        return this.locationRepository;
-    }
-
-    getStaffRepository(): StaffRepository {
-        if (!this.staffRepository) {
-            if (!this.sqliteService) {
-                this.sqliteService = new SqliteService();
-            }
-            this.staffRepository = new StaffRepository(this.sqliteService);
-        }
-        return this.staffRepository;
-    }
-
-    getSupplierRepository(): SupplierRepository {
-        if (!this.supplierRepository) {
-            if (!this.sqliteService) {
-                this.sqliteService = new SqliteService();
-            }
-            this.supplierRepository = new SupplierRepository(this.sqliteService);
-        }
-        return this.supplierRepository;
-    }
-
-    getInventoryDataRepository(): InventoryDataRepository {
-        if (!this.inventoryDataRepository) {
-            if (!this.sqliteService) {
-                this.sqliteService = new SqliteService();
-            }
-            this.inventoryDataRepository = new InventoryDataRepository(this.sqliteService);
-        }
-        return this.inventoryDataRepository;
-    }
-
-    getStockinDataRepository(): StockinDataRepository {
-        if (!this.stockinDataRepository) {
-            if (!this.sqliteService) {
-                this.sqliteService = new SqliteService();
-            }
-            this.stockinDataRepository = new StockinDataRepository(this.sqliteService);
-        }
-        return this.stockinDataRepository;
-    }
-
-    getStockoutDataRepository(): StockoutDataRepository {
-        if (!this.stockoutDataRepository) {
-            if (!this.sqliteService) {
-                this.sqliteService = new SqliteService();
-            }
-            this.stockoutDataRepository = new StockoutDataRepository(this.sqliteService);
-        }
-        return this.stockoutDataRepository;
-    }
-
-    getSqliteService(): SqliteService {
-        if (!this.sqliteService) {
-            this.sqliteService = new SqliteService();
-        }
-        return this.sqliteService;
-    }
-
+    /**
+     * Reset all services (useful for testing or cleanup)
+     */
     reset(): void {
         this.appService = null;
         this.androidDeviceService = null;
         this.settingService = null;
-        this.dataService = null;
-        this.sqliteService = null;
-        this.productRepository = null;
-        this.locationRepository = null;
-        this.staffRepository = null;
-        this.supplierRepository = null;
-        this.inventoryDataRepository = null;
-        this.stockinDataRepository = null;
-        this.stockoutDataRepository = null;
+    }
+}
+
+/**
+ * Data Service Helper for Renderer Process
+ * This class provides a clean interface to the main process data service
+ * through IPC communication.
+ */
+export class RendererDataService {
+    private static instance: RendererDataService;
+
+    private constructor() {}
+
+    static getInstance(): RendererDataService {
+        if (!RendererDataService.instance) {
+            RendererDataService.instance = new RendererDataService();
+        }
+        return RendererDataService.instance;
+    }
+
+    /**
+     * Get all data counts from the main process data service
+     */
+    async getDataCounts() {
+        try {
+            return await window.electronAPI.data.getDataCounts();
+        } catch (error) {
+            console.error('Error getting data counts from main process:', error);
+            return {
+                inventory: 0,
+                stockin: 0,
+                stockout: 0,
+                products: 0,
+                locations: 0,
+                staff: 0,
+                suppliers: 0,
+            };
+        }
+    }
+
+    /**
+     * Get all master data from the main process data service
+     */
+    async getAllMasterData() {
+        try {
+            return await window.electronAPI.data.getAllMasterData();
+        } catch (error) {
+            console.error('Error getting master data from main process:', error);
+            return {
+                products: [],
+                locations: [],
+                staff: [],
+                suppliers: [],
+            };
+        }
+    }
+
+    /**
+     * Get products from the main process data service
+     */
+    async getProducts() {
+        try {
+            return await window.electronAPI.data.getAllProducts();
+        } catch (error) {
+            console.error('Error getting products from main process:', error);
+            return [];
+        }
+    }
+
+    /**
+     * Get locations from the main process data service
+     */
+    async getLocations() {
+        try {
+            return await window.electronAPI.data.getAllLocations();
+        } catch (error) {
+            console.error('Error getting locations from main process:', error);
+            return [];
+        }
+    }
+
+    /**
+     * Get staff from the main process data service
+     */
+    async getStaff() {
+        try {
+            return await window.electronAPI.data.getAllStaff();
+        } catch (error) {
+            console.error('Error getting staff from main process:', error);
+            return [];
+        }
+    }
+
+    /**
+     * Get suppliers from the main process data service
+     */
+    async getSuppliers() {
+        try {
+            return await window.electronAPI.data.getAllSuppliers();
+        } catch (error) {
+            console.error('Error getting suppliers from main process:', error);
+            return [];
+        }
+    }
+
+    /**
+     * Get inventory data count from the main process data service
+     */
+    async getInventoryDataCount() {
+        try {
+            return await window.electronAPI.data.getInventoryDataCount();
+        } catch (error) {
+            console.error('Error getting inventory data count from main process:', error);
+            return 0;
+        }
+    }
+
+    /**
+     * Get stockin data count from the main process data service
+     */
+    async getStockinDataCount() {
+        try {
+            return await window.electronAPI.data.getStockinDataCount();
+        } catch (error) {
+            console.error('Error getting stockin data count from main process:', error);
+            return 0;
+        }
+    }
+
+    /**
+     * Get stockout data count from the main process data service
+     */
+    async getStockoutDataCount() {
+        try {
+            return await window.electronAPI.data.getStockoutDataCount();
+        } catch (error) {
+            console.error('Error getting stockout data count from main process:', error);
+            return 0;
+        }
     }
 }

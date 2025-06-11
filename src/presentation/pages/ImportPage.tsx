@@ -1,4 +1,4 @@
-// src/presentation/pages/ImportPage.tsx - Updated with handy system integration
+// src/presentation/pages/ImportPage.tsx - Updated to use service layer architecture
 import React, { useState, useRef, useEffect } from 'react';
 import {
     Container,
@@ -35,6 +35,7 @@ import {
     AccordionSummary,
     AccordionDetails,
     Divider,
+    Grid,
 } from '@mui/material';
 import {
     Upload,
@@ -55,12 +56,13 @@ import {
     Business,
     Group,
     Inventory,
+    Assessment,
 } from '@mui/icons-material';
 import { AndroidDevice } from '@/domain/entities/AndroidDevice';
 import { FileTransferResult } from '@/domain/entities/FileTransferResult';
 import { ImportResult } from '@/domain/entities/ImportResult';
 import { ImportFileType } from '@/application/services/DataImportService';
-import { DIContainer } from '@/application/services/DIContainer';
+import { DIContainer, RendererDataService } from '@/application/services/DIContainer';
 import { SETTING_KEYS } from '@/shared/constants/settings';
 
 interface ImportedFile {
@@ -86,6 +88,16 @@ interface TransferProgress {
     overallProgress: number;
 }
 
+interface DataCounts {
+    inventory: number;
+    stockin: number;
+    stockout: number;
+    products: number;
+    locations: number;
+    staff: number;
+    suppliers: number;
+}
+
 interface ImportPageProps {
     connectedDevice?: AndroidDevice | null;
 }
@@ -100,10 +112,13 @@ export const ImportPage: React.FC<ImportPageProps> = ({ connectedDevice }) => {
     const [success, setSuccess] = useState<string | null>(null);
     const [importPath, setImportPath] = useState<string>('');
     const [importResults, setImportResults] = useState<ImportResult[]>([]);
+    const [dataCounts, setDataCounts] = useState<DataCounts | null>(null);
+    const [loadingCounts, setLoadingCounts] = useState<boolean>(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const androidDeviceService = DIContainer.getInstance().getAndroidDeviceService();
     const settingService = DIContainer.getInstance().getSettingService();
+    const dataService = RendererDataService.getInstance();
 
     const ALLOWED_TYPES = [
         '.csv',
@@ -116,11 +131,19 @@ export const ImportPage: React.FC<ImportPageProps> = ({ connectedDevice }) => {
 
     useEffect(() => {
         loadImportPath();
+        loadDataCounts();
 
         return () => {
             cleanupAllTemporaryFiles();
         };
     }, []);
+
+    useEffect(() => {
+        // Refresh data counts after successful imports
+        if (importResults.length > 0 && importResults.some(result => result.success)) {
+            loadDataCounts();
+        }
+    }, [importResults]);
 
     const loadImportPath = async () => {
         try {
@@ -130,6 +153,31 @@ export const ImportPage: React.FC<ImportPageProps> = ({ connectedDevice }) => {
             console.error('Failed to load import path:', error);
             setImportPath('/sdcard/Downloads');
         }
+    };
+
+    const loadDataCounts = async () => {
+        setLoadingCounts(true);
+        try {
+            const counts = await dataService.getDataCounts();
+            setDataCounts(counts);
+        } catch (error) {
+            console.error('Failed to load data counts:', error);
+            setDataCounts({
+                inventory: 0,
+                stockin: 0,
+                stockout: 0,
+                products: 0,
+                locations: 0,
+                staff: 0,
+                suppliers: 0,
+            });
+        } finally {
+            setLoadingCounts(false);
+        }
+    };
+
+    const handleRefreshCounts = async () => {
+        await loadDataCounts();
     };
 
     const formatFileSize = (bytes: number): string => {
@@ -260,7 +308,6 @@ export const ImportPage: React.FC<ImportPageProps> = ({ connectedDevice }) => {
             const tempPath = await createTemporaryFile(file.file);
             const parseResult = await window.electronAPI.import.parseFile(tempPath);
 
-            // Clean up the temporary file used for parsing
             await cleanupTemporaryFile(tempPath);
 
             if (parseResult.success && parseResult.detectedType) {
@@ -309,7 +356,6 @@ export const ImportPage: React.FC<ImportPageProps> = ({ connectedDevice }) => {
 
         setImportedFiles((prev) => [...prev, ...newImportedFiles]);
 
-        // Detect file types asynchronously
         const updatedFiles = await Promise.all(
             newImportedFiles.map((file) => detectFileTypeAndParse(file)),
         );
@@ -399,7 +445,6 @@ export const ImportPage: React.FC<ImportPageProps> = ({ connectedDevice }) => {
             const tempPath = await createTemporaryFile(file.file);
             const parseResult = await window.electronAPI.import.parseFile(tempPath);
 
-            // Clean up the temporary file used for parsing
             await cleanupTemporaryFile(tempPath);
 
             if (!parseResult.success) {
@@ -477,7 +522,6 @@ export const ImportPage: React.FC<ImportPageProps> = ({ connectedDevice }) => {
                     overallProgress: Math.round((i / filesToProcess.length) * 100),
                 });
 
-                // Update file status to processing
                 setImportedFiles((prev) =>
                     prev.map((f) =>
                         f.id === file.id
@@ -491,31 +535,22 @@ export const ImportPage: React.FC<ImportPageProps> = ({ connectedDevice }) => {
                 );
 
                 try {
-                    // Create temporary file from the File object
                     const tempPath = await createTemporaryFile(file.file);
                     createdTempFiles.push(tempPath);
 
-                    // Store temp file path for later cleanup
                     setImportedFiles((prev) =>
                         prev.map((f) => (f.id === file.id ? { ...f, tempFilePath: tempPath } : f)),
                     );
 
-                    // Ensure Import directory exists
-                    //await androidDeviceService.createDirectory(connectedDevice.id, `${importPath}/Import`);
-
-                    // Parallel operations: transfer to device AND import to database
                     const [transferResult, importResult] = await Promise.all([
-                        // Transfer file to device Import directory
                         androidDeviceService.uploadFile(
                             connectedDevice.id,
                             tempPath,
                             `${importPath}/Import/${file.name}`,
                         ),
-                        // Import data to database
                         importToDatabase(file),
                     ]);
 
-                    // Process transfer result
                     if (transferResult.success) {
                         transferSuccessCount++;
                         setImportedFiles((prev) =>
@@ -541,7 +576,6 @@ export const ImportPage: React.FC<ImportPageProps> = ({ connectedDevice }) => {
                         );
                     }
 
-                    // Process import result
                     if (importResult.success) {
                         importSuccessCount++;
                         setImportedFiles((prev) =>
@@ -598,7 +632,6 @@ export const ImportPage: React.FC<ImportPageProps> = ({ connectedDevice }) => {
                 }
             }
 
-            // Final progress update
             setTransferProgress({
                 currentFile: filesToProcess.length,
                 totalFiles: filesToProcess.length,
@@ -606,17 +639,11 @@ export const ImportPage: React.FC<ImportPageProps> = ({ connectedDevice }) => {
                 overallProgress: 100,
             });
 
-            // Create interface.txt file if there were successful transfers
             if (transferSuccessCount > 0) {
                 try {
-                    // Ensure Interface directory exists
-                    //await androidDeviceService.createDirectory(connectedDevice.id, `${importPath}/Interface`);
-
-                    // Create interface.txt file with import flag
                     const interfaceContent = '{clearData:false,importFlg:true}';
                     const interfaceFileName = 'interface.txt';
 
-                    // Create a temporary file for the interface content
                     const interfaceBlob = new Blob([interfaceContent], { type: 'text/plain' });
                     const interfaceFile = new File([interfaceBlob], interfaceFileName, {
                         type: 'text/plain',
@@ -624,7 +651,6 @@ export const ImportPage: React.FC<ImportPageProps> = ({ connectedDevice }) => {
                     const interfaceTempPath = await createTemporaryFile(interfaceFile);
                     createdTempFiles.push(interfaceTempPath);
 
-                    // Upload interface file to device
                     await androidDeviceService.uploadFile(
                         connectedDevice.id,
                         interfaceTempPath,
@@ -634,13 +660,11 @@ export const ImportPage: React.FC<ImportPageProps> = ({ connectedDevice }) => {
                     console.log('Interface file created successfully');
                 } catch (error) {
                     console.error('Failed to create interface file:', error);
-                    // Don't fail the entire operation if interface file creation fails
                 }
             }
 
             setImportResults(currentImportResults);
 
-            // Show final results
             const totalSuccessful = Math.min(transferSuccessCount, importSuccessCount);
             const anyFailures = transferFailureCount > 0 || importFailureCount > 0;
 
@@ -655,13 +679,14 @@ export const ImportPage: React.FC<ImportPageProps> = ({ connectedDevice }) => {
             } else {
                 setError(`Processing failed: files could not be transferred or imported`);
             }
+
+            // Refresh data counts after successful imports
+            await loadDataCounts();
         } finally {
-            // Clean up all created temporary files
             for (const tempPath of createdTempFiles) {
                 await cleanupTemporaryFile(tempPath);
             }
 
-            // Clear temp file paths from state
             setImportedFiles((prev) => prev.map((f) => ({ ...f, tempFilePath: undefined })));
 
             setTimeout(() => {
@@ -695,6 +720,80 @@ export const ImportPage: React.FC<ImportPageProps> = ({ connectedDevice }) => {
                         devices. Files will be automatically parsed and stored in the local database
                         while simultaneously being transferred to your connected device.
                     </Typography>
+
+                    {/* Current Data Overview */}
+                    <Card sx={{ mb: 3 }}>
+                        <CardContent>
+                            <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
+                                <Box display="flex" alignItems="center" gap={2}>
+                                    <Assessment sx={{ color: 'primary.main' }} />
+                                    <Typography variant="h6">Current Database Status</Typography>
+                                </Box>
+                                <Button
+                                    variant="outlined"
+                                    size="small"
+                                    startIcon={loadingCounts ? <CircularProgress size={16} /> : <Refresh />}
+                                    onClick={handleRefreshCounts}
+                                    disabled={loadingCounts || transferring || importing}
+                                >
+                                    Refresh
+                                </Button>
+                            </Box>
+
+                            {loadingCounts ? (
+                                <Box display="flex" justifyContent="center" py={2}>
+                                    <CircularProgress size={24} />
+                                </Box>
+                            ) : dataCounts ? (
+                                <Grid container spacing={2}>
+                                    <Grid item xs={6} md={3}>
+                                        <Box textAlign="center" p={1} border={1} borderColor="divider" borderRadius={1}>
+                                            <Typography variant="h5" color="primary">
+                                                {dataCounts.products.toLocaleString()}
+                                            </Typography>
+                                            <Typography variant="caption" color="text.secondary">
+                                                Products
+                                            </Typography>
+                                        </Box>
+                                    </Grid>
+                                    <Grid item xs={6} md={3}>
+                                        <Box textAlign="center" p={1} border={1} borderColor="divider" borderRadius={1}>
+                                            <Typography variant="h5" color="primary">
+                                                {dataCounts.locations.toLocaleString()}
+                                            </Typography>
+                                            <Typography variant="caption" color="text.secondary">
+                                                Locations
+                                            </Typography>
+                                        </Box>
+                                    </Grid>
+                                    <Grid item xs={6} md={3}>
+                                        <Box textAlign="center" p={1} border={1} borderColor="divider" borderRadius={1}>
+                                            <Typography variant="h5" color="primary">
+                                                {dataCounts.staff.toLocaleString()}
+                                            </Typography>
+                                            <Typography variant="caption" color="text.secondary">
+                                                Staff
+                                            </Typography>
+                                        </Box>
+                                    </Grid>
+                                    <Grid item xs={6} md={3}>
+                                        <Box textAlign="center" p={1} border={1} borderColor="divider" borderRadius={1}>
+                                            <Typography variant="h5" color="primary">
+                                                {dataCounts.suppliers.toLocaleString()}
+                                            </Typography>
+                                            <Typography variant="caption" color="text.secondary">
+                                                Suppliers
+                                            </Typography>
+                                        </Box>
+                                    </Grid>
+                                </Grid>
+                            ) : (
+                                <Typography variant="body2" color="text.secondary">
+                                    Unable to load database counts
+                                </Typography>
+                            )}
+                        </CardContent>
+                    </Card>
 
                     {/* Transfer Progress */}
                     {transferProgress && (

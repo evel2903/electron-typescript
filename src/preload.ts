@@ -1,4 +1,4 @@
-// src/preload.ts - Updated with data synchronization APIs (types removed to prevent conflicts)
+// src/preload.ts - Updated with service layer IPC handlers
 import { contextBridge, ipcRenderer } from 'electron';
 
 // Expose protected methods that allow the renderer process to use
@@ -82,14 +82,21 @@ contextBridge.exposeInMainWorld('electronAPI', {
         },
     },
 
-    // Data Query APIs exposed via IPC
+    // Data Query APIs exposed via IPC - Updated with service layer endpoints
     data: {
+        // Individual entity access (maintained for backward compatibility)
         getAllProducts: () => ipcRenderer.invoke('data:getAllProducts'),
         getAllLocations: () => ipcRenderer.invoke('data:getAllLocations'),
         getAllStaff: () => ipcRenderer.invoke('data:getAllStaff'),
         getAllSuppliers: () => ipcRenderer.invoke('data:getAllSuppliers'),
+        
+        // Individual count access (maintained for backward compatibility)
         getInventoryDataCount: () => ipcRenderer.invoke('data:getInventoryDataCount'),
         getStockinDataCount: () => ipcRenderer.invoke('data:getStockinDataCount'),
         getStockoutDataCount: () => ipcRenderer.invoke('data:getStockoutDataCount'),
+        
+        // New aggregated service operations
+        getDataCounts: () => ipcRenderer.invoke('data:getDataCounts'),
+        getAllMasterData: () => ipcRenderer.invoke('data:getAllMasterData'),
     },
 });
