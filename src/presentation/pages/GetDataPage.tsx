@@ -305,60 +305,7 @@ export const GetDataPage: React.FC<GetDataPageProps> = ({ connectedDevice }) => 
             </Grid>
           </Grid>
 
-          {/* Sync Results */}
-          {syncResults.length > 0 && (
-            <Card sx={{ mb: 3 }}>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  Synchronization Results
-                </Typography>
-                <Divider sx={{ mb: 2 }} />
-                
-                <TableContainer component={Paper} variant="outlined">
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell>Table</TableCell>
-                        <TableCell align="right">Records Found</TableCell>
-                        <TableCell align="right">Inserted</TableCell>
-                        <TableCell align="right">Updated</TableCell>
-                        <TableCell>Status</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {syncResults.map((result, index) => (
-                        <TableRow key={index}>
-                          <TableCell>
-                            <Box display="flex" alignItems="center" gap={1}>
-                              {getTableIcon(result.tableName)}
-                              {getTableDisplayName(result.tableName)}
-                            </Box>
-                          </TableCell>
-                          <TableCell align="right">{result.recordsFound}</TableCell>
-                          <TableCell align="right">{result.recordsInserted}</TableCell>
-                          <TableCell align="right">{result.recordsUpdated}</TableCell>
-                          <TableCell>
-                            <Box display="flex" alignItems="center" gap={1}>
-                              {getSyncResultIcon(result)}
-                              <Typography variant="body2" color={result.success ? 'success.main' : 'error.main'}>
-                                {result.success ? 'Success' : 'Failed'}
-                              </Typography>
-                            </Box>
-                            {result.error && (
-                              <Typography variant="caption" color="error">
-                                {result.error}
-                              </Typography>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              </CardContent>
-            </Card>
-          )}
-
+          
           {/* Action Card */}
           <Card>
             <CardContent>
@@ -426,6 +373,60 @@ export const GetDataPage: React.FC<GetDataPageProps> = ({ connectedDevice }) => 
               </Box>
             </CardContent>
           </Card>
+
+          {/* Sync Results */}
+          {syncResults.length > 0 && (
+            <Card sx={{ mb: 3 }}>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>
+                  Synchronization Results
+                </Typography>
+                <Divider sx={{ mb: 2 }} />
+                
+                <TableContainer component={Paper} variant="outlined">
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Table</TableCell>
+                        <TableCell align="right">Records Found</TableCell>
+                        <TableCell align="right">Inserted</TableCell>
+                        <TableCell align="right">Updated</TableCell>
+                        <TableCell>Status</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {syncResults.map((result, index) => (
+                        <TableRow key={index}>
+                          <TableCell>
+                            <Box display="flex" alignItems="center" gap={1}>
+                              {getTableIcon(result.tableName)}
+                              {getTableDisplayName(result.tableName)}
+                            </Box>
+                          </TableCell>
+                          <TableCell align="right">{result.recordsFound}</TableCell>
+                          <TableCell align="right">{result.recordsInserted}</TableCell>
+                          <TableCell align="right">{result.recordsUpdated}</TableCell>
+                          <TableCell>
+                            <Box display="flex" alignItems="center" gap={1}>
+                              {getSyncResultIcon(result)}
+                              <Typography variant="body2" color={result.success ? 'success.main' : 'error.main'}>
+                                {result.success ? 'Success' : 'Failed'}
+                              </Typography>
+                            </Box>
+                            {result.error && (
+                              <Typography variant="caption" color="error">
+                                {result.error}
+                              </Typography>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </CardContent>
+            </Card>
+          )}
         </Box>
       </Container>
 
