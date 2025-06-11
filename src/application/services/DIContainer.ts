@@ -10,50 +10,50 @@ import { SqliteService } from '@/infrastructure/services/SqliteService';
 import { IElectronAPI } from '../interfaces/IElectronAPI';
 
 export class DIContainer {
-  private static instance: DIContainer;
-  private appService: AppService | null = null;
-  private androidDeviceService: AndroidDeviceService | null = null;
-  private settingService: SettingService | null = null;
+    private static instance: DIContainer;
+    private appService: AppService | null = null;
+    private androidDeviceService: AndroidDeviceService | null = null;
+    private settingService: SettingService | null = null;
 
-  private constructor() {}
+    private constructor() {}
 
-  static getInstance(): DIContainer {
-    if (!DIContainer.instance) {
-      DIContainer.instance = new DIContainer();
+    static getInstance(): DIContainer {
+        if (!DIContainer.instance) {
+            DIContainer.instance = new DIContainer();
+        }
+        return DIContainer.instance;
     }
-    return DIContainer.instance;
-  }
 
-  getAppService(electronAPI?: IElectronAPI): AppService {
-    if (!this.appService) {
-      const userRepository = new UserRepository();
-      const appInfoRepository = new AppInfoRepository(electronAPI);
-      this.appService = new AppService(userRepository, appInfoRepository);
+    getAppService(electronAPI?: IElectronAPI): AppService {
+        if (!this.appService) {
+            const userRepository = new UserRepository();
+            const appInfoRepository = new AppInfoRepository(electronAPI);
+            this.appService = new AppService(userRepository, appInfoRepository);
+        }
+        return this.appService;
     }
-    return this.appService;
-  }
 
-  getAndroidDeviceService(): AndroidDeviceService {
-    if (!this.androidDeviceService) {
-      // AndroidDeviceRepository now uses IPC instead of direct AdbService
-      const androidDeviceRepository = new AndroidDeviceRepository();
-      this.androidDeviceService = new AndroidDeviceService(androidDeviceRepository);
+    getAndroidDeviceService(): AndroidDeviceService {
+        if (!this.androidDeviceService) {
+            // AndroidDeviceRepository now uses IPC instead of direct AdbService
+            const androidDeviceRepository = new AndroidDeviceRepository();
+            this.androidDeviceService = new AndroidDeviceService(androidDeviceRepository);
+        }
+        return this.androidDeviceService;
     }
-    return this.androidDeviceService;
-  }
 
-  getSettingService(): SettingService {
-    if (!this.settingService) {
-      // SettingRepository uses IPC to communicate with main process SQLite service
-      const settingRepository = new SettingRepository();
-      this.settingService = new SettingService(settingRepository);
+    getSettingService(): SettingService {
+        if (!this.settingService) {
+            // SettingRepository uses IPC to communicate with main process SQLite service
+            const settingRepository = new SettingRepository();
+            this.settingService = new SettingService(settingRepository);
+        }
+        return this.settingService;
     }
-    return this.settingService;
-  }
 
-  reset(): void {
-    this.appService = null;
-    this.androidDeviceService = null;
-    this.settingService = null;
-  }
+    reset(): void {
+        this.appService = null;
+        this.androidDeviceService = null;
+        this.settingService = null;
+    }
 }

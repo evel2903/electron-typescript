@@ -12,87 +12,95 @@ import { ImportResult } from '@/domain/entities/ImportResult';
 import { FileParseResult, ImportFileType } from '@/application/services/DataImportService';
 
 export interface SyncResult {
-  tableName: string;
-  recordsFound: number;
-  recordsInserted: number;
-  recordsUpdated: number;
-  success: boolean;
-  error?: string;
+    tableName: string;
+    recordsFound: number;
+    recordsInserted: number;
+    recordsUpdated: number;
+    success: boolean;
+    error?: string;
 }
 
 export interface SyncProgress {
-  currentTable: string;
-  tablesCompleted: number;
-  totalTables: number;
-  currentRecords: number;
-  totalRecords: number;
-  overallProgress: number;
+    currentTable: string;
+    tablesCompleted: number;
+    totalTables: number;
+    currentRecords: number;
+    totalRecords: number;
+    overallProgress: number;
 }
 
 export interface ElectronAPI {
-  getVersions(): {
-    node: string;
-    chrome: string;
-    electron: string;
-  };
-  getPlatform(): string;
-  
-  // File System operations for temporary file management
-  fs: {
-    writeTemporaryFile(fileName: string, arrayBuffer: ArrayBuffer): Promise<string>;
-    cleanupTemporaryFile(filePath: string): Promise<boolean>;
-  };
-  
-  adb: {
-    isAvailable(): Promise<boolean>;
-    listDevices(): Promise<AndroidDevice[]>;
-    getDeviceInfo(deviceId: string): Promise<AndroidDevice | null>;
-    authorizeDevice(deviceId: string): Promise<boolean>;
-    listFiles(deviceId: string, path: string): Promise<DeviceFile[]>;
-    pullFile(deviceId: string, remotePath: string, localPath: string): Promise<FileTransferResult>;
-    pushFile(deviceId: string, localPath: string, remotePath: string): Promise<FileTransferResult>;
-    createDirectory(deviceId: string, path: string): Promise<boolean>;
-    deleteFile(deviceId: string, path: string): Promise<boolean>;
-  };
+    getVersions(): {
+        node: string;
+        chrome: string;
+        electron: string;
+    };
+    getPlatform(): string;
 
-  settings: {
-    initialize(): Promise<boolean>;
-    getSetting(key: SettingKey): Promise<Setting | null>;
-    updateSetting(key: SettingKey, value: string): Promise<Setting>;
-    getAllSettings(): Promise<Setting[]>;
-    deleteSetting(key: SettingKey): Promise<boolean>;
-  };
+    // File System operations for temporary file management
+    fs: {
+        writeTemporaryFile(fileName: string, arrayBuffer: ArrayBuffer): Promise<string>;
+        cleanupTemporaryFile(filePath: string): Promise<boolean>;
+    };
 
-  // Data Import APIs
-  import: {
-    parseFile(filePath: string): Promise<FileParseResult>;
-    importData(csvData: any[], fileType: ImportFileType): Promise<ImportResult>;
-    detectFileType(headers: string[]): Promise<ImportFileType | null>;
-  };
+    adb: {
+        isAvailable(): Promise<boolean>;
+        listDevices(): Promise<AndroidDevice[]>;
+        getDeviceInfo(deviceId: string): Promise<AndroidDevice | null>;
+        authorizeDevice(deviceId: string): Promise<boolean>;
+        listFiles(deviceId: string, path: string): Promise<DeviceFile[]>;
+        pullFile(
+            deviceId: string,
+            remotePath: string,
+            localPath: string,
+        ): Promise<FileTransferResult>;
+        pushFile(
+            deviceId: string,
+            localPath: string,
+            remotePath: string,
+        ): Promise<FileTransferResult>;
+        createDirectory(deviceId: string, path: string): Promise<boolean>;
+        deleteFile(deviceId: string, path: string): Promise<boolean>;
+    };
 
-  // Data Synchronization APIs
-  dataSync: {
-    syncFromDevice(
-      deviceId: string, 
-      remoteDatabasePath: string, 
-      progressCallback?: (progress: SyncProgress) => void
-    ): Promise<SyncResult[]>;
-  };
+    settings: {
+        initialize(): Promise<boolean>;
+        getSetting(key: SettingKey): Promise<Setting | null>;
+        updateSetting(key: SettingKey, value: string): Promise<Setting>;
+        getAllSettings(): Promise<Setting[]>;
+        deleteSetting(key: SettingKey): Promise<boolean>;
+    };
 
-  // Data Query APIs
-  data: {
-    getAllProducts(): Promise<Product[]>;
-    getAllLocations(): Promise<Location[]>;
-    getAllStaff(): Promise<Staff[]>;
-    getAllSuppliers(): Promise<Supplier[]>;
-    getInventoryDataCount(): Promise<number>;
-    getStockinDataCount(): Promise<number>;
-    getStockoutDataCount(): Promise<number>;
-  };
+    // Data Import APIs
+    import: {
+        parseFile(filePath: string): Promise<FileParseResult>;
+        importData(csvData: any[], fileType: ImportFileType): Promise<ImportResult>;
+        detectFileType(headers: string[]): Promise<ImportFileType | null>;
+    };
+
+    // Data Synchronization APIs
+    dataSync: {
+        syncFromDevice(
+            deviceId: string,
+            remoteDatabasePath: string,
+            progressCallback?: (progress: SyncProgress) => void,
+        ): Promise<SyncResult[]>;
+    };
+
+    // Data Query APIs
+    data: {
+        getAllProducts(): Promise<Product[]>;
+        getAllLocations(): Promise<Location[]>;
+        getAllStaff(): Promise<Staff[]>;
+        getAllSuppliers(): Promise<Supplier[]>;
+        getInventoryDataCount(): Promise<number>;
+        getStockinDataCount(): Promise<number>;
+        getStockoutDataCount(): Promise<number>;
+    };
 }
 
 declare global {
-  interface Window {
-    electronAPI: ElectronAPI;
-  }
+    interface Window {
+        electronAPI: ElectronAPI;
+    }
 }

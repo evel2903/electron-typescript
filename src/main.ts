@@ -1,22 +1,22 @@
 // src/main.ts - Updated with data synchronization functionality
-import { app, BrowserWindow, ipcMain } from "electron";
-import * as path from "path";
-import * as fs from "fs";
-import * as os from "os";
-import { AdbService } from "./infrastructure/services/AdbService";
-import { SqliteService } from "./infrastructure/services/SqliteService";
-import { FileParserService } from "./infrastructure/services/FileParserService";
-import { DataSyncService } from "./infrastructure/services/DataSyncService";
-import { MainSettingRepository } from "./infrastructure/repositories/MainSettingRepository";
-import { ProductRepository } from "./infrastructure/repositories/ProductRepository";
-import { LocationRepository } from "./infrastructure/repositories/LocationRepository";
-import { StaffRepository } from "./infrastructure/repositories/StaffRepository";
-import { SupplierRepository } from "./infrastructure/repositories/SupplierRepository";
-import { InventoryDataRepository } from "./infrastructure/repositories/InventoryDataRepository";
-import { StockinDataRepository } from "./infrastructure/repositories/StockinDataRepository";
-import { StockoutDataRepository } from "./infrastructure/repositories/StockoutDataRepository";
-import { SettingService } from "./application/services/SettingService";
-import { DataImportService } from "./application/services/DataImportService";
+import { app, BrowserWindow, ipcMain } from 'electron';
+import * as path from 'path';
+import * as fs from 'fs';
+import * as os from 'os';
+import { AdbService } from './infrastructure/services/AdbService';
+import { SqliteService } from './infrastructure/services/SqliteService';
+import { FileParserService } from './infrastructure/services/FileParserService';
+import { DataSyncService } from './infrastructure/services/DataSyncService';
+import { MainSettingRepository } from './infrastructure/repositories/MainSettingRepository';
+import { ProductRepository } from './infrastructure/repositories/ProductRepository';
+import { LocationRepository } from './infrastructure/repositories/LocationRepository';
+import { StaffRepository } from './infrastructure/repositories/StaffRepository';
+import { SupplierRepository } from './infrastructure/repositories/SupplierRepository';
+import { InventoryDataRepository } from './infrastructure/repositories/InventoryDataRepository';
+import { StockinDataRepository } from './infrastructure/repositories/StockinDataRepository';
+import { StockoutDataRepository } from './infrastructure/repositories/StockoutDataRepository';
+import { SettingService } from './application/services/SettingService';
+import { DataImportService } from './application/services/DataImportService';
 
 // Initialize services in main process
 const adbService = new AdbService();
@@ -40,7 +40,7 @@ const dataImportService = new DataImportService(
     productRepository,
     locationRepository,
     staffRepository,
-    supplierRepository
+    supplierRepository,
 );
 
 function createWindow(): void {
@@ -48,7 +48,7 @@ function createWindow(): void {
         height: 800,
         width: 1200,
         webPreferences: {
-            preload: path.join(__dirname, "preload.js"),
+            preload: path.join(__dirname, 'preload.js'),
             nodeIntegration: false,
             contextIsolation: true,
         },
@@ -56,7 +56,7 @@ function createWindow(): void {
         show: false,
     });
 
-    mainWindow.loadFile(path.join(__dirname, "../index.html"));
+    mainWindow.loadFile(path.join(__dirname, '../index.html'));
 
     // Show window when ready to prevent visual flash
     mainWindow.once('ready-to-show', () => {
@@ -85,7 +85,7 @@ app.whenReady().then(async () => {
 
     createWindow();
 
-    app.on("activate", () => {
+    app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) {
             createWindow();
         }
@@ -97,7 +97,10 @@ ipcMain.handle('fs:writeTemporaryFile', async (_, fileName: string, arrayBuffer:
     try {
         const tempDir = os.tmpdir();
         const sanitizedFileName = path.basename(fileName); // Security: prevent path traversal
-        const tempPath = path.join(tempDir, `electron_transfer_${Date.now()}_${Math.random().toString(36).substring(7)}_${sanitizedFileName}`);
+        const tempPath = path.join(
+            tempDir,
+            `electron_transfer_${Date.now()}_${Math.random().toString(36).substring(7)}_${sanitizedFileName}`,
+        );
 
         const buffer = Buffer.from(arrayBuffer);
         await fs.promises.writeFile(tempPath, buffer);
@@ -177,31 +180,37 @@ ipcMain.handle('adb:listFiles', async (_, deviceId: string, path: string) => {
     }
 });
 
-ipcMain.handle('adb:pullFile', async (_, deviceId: string, remotePath: string, localPath: string) => {
-    try {
-        return await adbService.pullFile(deviceId, remotePath, localPath);
-    } catch (error) {
-        console.error('Error pulling file:', error);
-        return {
-            success: false,
-            message: 'Failed to transfer file from device',
-            error: error instanceof Error ? error.message : 'Unknown error'
-        };
-    }
-});
+ipcMain.handle(
+    'adb:pullFile',
+    async (_, deviceId: string, remotePath: string, localPath: string) => {
+        try {
+            return await adbService.pullFile(deviceId, remotePath, localPath);
+        } catch (error) {
+            console.error('Error pulling file:', error);
+            return {
+                success: false,
+                message: 'Failed to transfer file from device',
+                error: error instanceof Error ? error.message : 'Unknown error',
+            };
+        }
+    },
+);
 
-ipcMain.handle('adb:pushFile', async (_, deviceId: string, localPath: string, remotePath: string) => {
-    try {
-        return await adbService.pushFile(deviceId, localPath, remotePath);
-    } catch (error) {
-        console.error('Error pushing file:', error);
-        return {
-            success: false,
-            message: 'Failed to transfer file to device',
-            error: error instanceof Error ? error.message : 'Unknown error'
-        };
-    }
-});
+ipcMain.handle(
+    'adb:pushFile',
+    async (_, deviceId: string, localPath: string, remotePath: string) => {
+        try {
+            return await adbService.pushFile(deviceId, localPath, remotePath);
+        } catch (error) {
+            console.error('Error pushing file:', error);
+            return {
+                success: false,
+                message: 'Failed to transfer file to device',
+                error: error instanceof Error ? error.message : 'Unknown error',
+            };
+        }
+    },
+);
 
 ipcMain.handle('adb:createDirectory', async (_, deviceId: string, path: string) => {
     try {
@@ -277,7 +286,7 @@ ipcMain.handle('import:parseFile', async (_, filePath: string) => {
         return {
             success: false,
             data: [],
-            error: error instanceof Error ? error.message : 'Unknown parsing error'
+            error: error instanceof Error ? error.message : 'Unknown parsing error',
         };
     }
 });
@@ -294,7 +303,7 @@ ipcMain.handle('import:importData', async (_, csvData: any[], fileType: string) 
             recordsProcessed: 0,
             recordsInserted: 0,
             recordsUpdated: 0,
-            errors: [error instanceof Error ? error.message : 'Unknown error']
+            errors: [error instanceof Error ? error.message : 'Unknown error'],
         };
     }
 });
@@ -309,26 +318,31 @@ ipcMain.handle('import:detectFileType', async (_, headers: string[]) => {
 });
 
 // IPC Handlers for Data Synchronization operations
-ipcMain.handle('dataSync:syncFromDevice', async (event, deviceId: string, remoteDatabasePath: string) => {
-    try {
-        console.log(`Starting data synchronization from device: ${deviceId}, database: ${remoteDatabasePath}`);
+ipcMain.handle(
+    'dataSync:syncFromDevice',
+    async (event, deviceId: string, remoteDatabasePath: string) => {
+        try {
+            console.log(
+                `Starting data synchronization from device: ${deviceId}, database: ${remoteDatabasePath}`,
+            );
 
-        const results = await dataSyncService.syncDataFromDevice(
-            deviceId,
-            remoteDatabasePath,
-            (progress) => {
-                // Send progress updates to renderer process
-                event.sender.send('dataSync:progress', progress);
-            }
-        );
+            const results = await dataSyncService.syncDataFromDevice(
+                deviceId,
+                remoteDatabasePath,
+                (progress) => {
+                    // Send progress updates to renderer process
+                    event.sender.send('dataSync:progress', progress);
+                },
+            );
 
-        console.log('Data synchronization completed:', results);
-        return results;
-    } catch (error) {
-        console.error('Error synchronizing data from device:', error);
-        throw error;
-    }
-});
+            console.log('Data synchronization completed:', results);
+            return results;
+        } catch (error) {
+            console.error('Error synchronizing data from device:', error);
+            throw error;
+        }
+    },
+);
 
 // IPC Handlers for Data Query operations
 ipcMain.handle('data:getAllProducts', async () => {
@@ -370,7 +384,9 @@ ipcMain.handle('data:getAllSuppliers', async () => {
 // IPC Handlers for Data Statistics operations
 ipcMain.handle('data:getInventoryDataCount', async () => {
     try {
-        const result = await sqliteService.get<{ count: number }>('SELECT COUNT(*) as count FROM inventory_data');
+        const result = await sqliteService.get<{ count: number }>(
+            'SELECT COUNT(*) as count FROM inventory_data',
+        );
         return result?.count || 0;
     } catch (error) {
         console.error('Error getting inventory data count:', error);
@@ -380,7 +396,9 @@ ipcMain.handle('data:getInventoryDataCount', async () => {
 
 ipcMain.handle('data:getStockinDataCount', async () => {
     try {
-        const result = await sqliteService.get<{ count: number }>('SELECT COUNT(*) as count FROM stockin_data');
+        const result = await sqliteService.get<{ count: number }>(
+            'SELECT COUNT(*) as count FROM stockin_data',
+        );
         return result?.count || 0;
     } catch (error) {
         console.error('Error getting stockin data count:', error);
@@ -390,7 +408,9 @@ ipcMain.handle('data:getStockinDataCount', async () => {
 
 ipcMain.handle('data:getStockoutDataCount', async () => {
     try {
-        const result = await sqliteService.get<{ count: number }>('SELECT COUNT(*) as count FROM stockout_data');
+        const result = await sqliteService.get<{ count: number }>(
+            'SELECT COUNT(*) as count FROM stockout_data',
+        );
         return result?.count || 0;
     } catch (error) {
         console.error('Error getting stockout data count:', error);
@@ -398,8 +418,8 @@ ipcMain.handle('data:getStockoutDataCount', async () => {
     }
 });
 
-app.on("window-all-closed", () => {
-    if (process.platform !== "darwin") {
+app.on('window-all-closed', () => {
+    if (process.platform !== 'darwin') {
         app.quit();
     }
 });

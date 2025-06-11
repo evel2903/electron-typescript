@@ -5,10 +5,10 @@ import { theme } from './theme/theme';
 import { HomePage } from './pages/HomePage';
 
 export const App: React.FC = () => {
-  return (
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
-      <HomePage />
-    </ThemeProvider>
-  );
+    return (
+        <ThemeProvider theme={theme}>
+            <CssBaseline />
+            <HomePage />
+        </ThemeProvider>
+    );
 };

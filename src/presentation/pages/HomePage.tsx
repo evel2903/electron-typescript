@@ -11,122 +11,122 @@ import { ElectronAPIService } from '@/infrastructure/services/ElectronAPIService
 import { AndroidDevice } from '@/domain/entities/AndroidDevice';
 
 export const HomePage: React.FC = () => {
-  const [selectedDevice, setSelectedDevice] = useState<AndroidDevice | null>(null);
-  const [currentTab, setCurrentTab] = useState<number>(0);
+    const [selectedDevice, setSelectedDevice] = useState<AndroidDevice | null>(null);
+    const [currentTab, setCurrentTab] = useState<number>(0);
 
-  useEffect(() => {
-    // Initialize settings database when app starts
-    const initializeSettings = async () => {
-      try {
-        const settingService = DIContainer.getInstance().getSettingService();
-        await settingService.getAllSettings(); // This will trigger initialization
-      } catch (error) {
-        console.error('Failed to initialize settings:', error);
-      }
+    useEffect(() => {
+        // Initialize settings database when app starts
+        const initializeSettings = async () => {
+            try {
+                const settingService = DIContainer.getInstance().getSettingService();
+                await settingService.getAllSettings(); // This will trigger initialization
+            } catch (error) {
+                console.error('Failed to initialize settings:', error);
+            }
+        };
+
+        initializeSettings();
+    }, []);
+
+    const handleDeviceSelected = (device: AndroidDevice) => {
+        setSelectedDevice(device);
     };
 
-    initializeSettings();
-  }, []);
+    const handleTabChange = (newValue: number) => {
+        setCurrentTab(newValue);
+    };
 
-  const handleDeviceSelected = (device: AndroidDevice) => {
-    setSelectedDevice(device);
-  };
+    const renderCurrentPage = () => {
+        switch (currentTab) {
+            case 0:
+                return <ImportPage connectedDevice={selectedDevice} />;
+            case 1:
+                return <GetDataPage connectedDevice={selectedDevice} />;
+            case 2:
+                return <Tab2Page />;
+            case 3:
+                return <SettingsPage />;
+            default:
+                return <ImportPage connectedDevice={selectedDevice} />;
+        }
+    };
 
-  const handleTabChange = (newValue: number) => {
-    setCurrentTab(newValue);
-  };
+    return (
+        <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
+            {/* Fixed Header */}
+            <Box
+                sx={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    zIndex: 1100, // Ensure header stays above other content
+                    backgroundColor: 'background.paper',
+                    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                    height: '56px',
+                }}
+            >
+                <Header
+                    currentTab={currentTab}
+                    onTabChange={handleTabChange}
+                    onDeviceSelected={handleDeviceSelected}
+                    connectedDevice={selectedDevice}
+                />
+            </Box>
 
-  const renderCurrentPage = () => {
-    switch (currentTab) {
-      case 0:
-        return <ImportPage connectedDevice={selectedDevice} />;
-      case 1:
-        return <GetDataPage connectedDevice={selectedDevice} />;
-      case 2:
-        return <Tab2Page />;
-      case 3:
-        return <SettingsPage />;
-      default:
-        return <ImportPage connectedDevice={selectedDevice} />;
-    }
-  };
+            {/* Main Content Area */}
+            <Box
+                sx={{
+                    flex: 1,
+                    marginTop: '56px',
+                    overflow: 'auto',
+                    paddingBottom: '40px', // Space for footer
+                }}
+            >
+                {renderCurrentPage()}
+            </Box>
 
-  return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
-      {/* Fixed Header */}
-      <Box
-        sx={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          zIndex: 1100, // Ensure header stays above other content
-          backgroundColor: 'background.paper',
-          boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-          height: '56px'
-        }}
-      >
-        <Header 
-          currentTab={currentTab} 
-          onTabChange={handleTabChange}
-          onDeviceSelected={handleDeviceSelected}
-          connectedDevice={selectedDevice}
-        />
-      </Box>
-      
-      {/* Main Content Area */}
-      <Box 
-        sx={{ 
-          flex: 1,
-          marginTop: '56px',
-          overflow: 'auto',
-          paddingBottom: '40px' // Space for footer
-        }}
-      >
-        {renderCurrentPage()}
-      </Box>
-      
-      {/* Fixed Footer at Bottom */}
-      <Box
-        sx={{
-          position: 'fixed',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          padding: '8px 16px',
-          textAlign: 'center',
-          borderTop: '1px solid',
-          borderColor: 'divider',
-          backgroundColor: 'background.paper',
-          fontSize: '0.75rem',
-          color: 'text.secondary',
-          height: '40px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000
-        }}
-      >
-        Copyright © 2025{' '}
-        <a
-          href="https://www.k-s-s.com.vn/"
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{
-            color: 'inherit',
-            textDecoration: 'none',
-            marginLeft: '4px'
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.textDecoration = 'underline';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.textDecoration = 'none';
-          }}
-        >
-          KSS Software Saigon
-        </a>
-      </Box>
-    </Box>
-  );
+            {/* Fixed Footer at Bottom */}
+            <Box
+                sx={{
+                    position: 'fixed',
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    padding: '8px 16px',
+                    textAlign: 'center',
+                    borderTop: '1px solid',
+                    borderColor: 'divider',
+                    backgroundColor: 'background.paper',
+                    fontSize: '0.75rem',
+                    color: 'text.secondary',
+                    height: '40px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 1000,
+                }}
+            >
+                Copyright © 2025{' '}
+                <a
+                    href="https://www.k-s-s.com.vn/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                        color: 'inherit',
+                        textDecoration: 'none',
+                        marginLeft: '4px',
+                    }}
+                    onMouseEnter={(e) => {
+                        e.currentTarget.style.textDecoration = 'underline';
+                    }}
+                    onMouseLeave={(e) => {
+                        e.currentTarget.style.textDecoration = 'none';
+                    }}
+                >
+                    KSS Software Saigon
+                </a>
+            </Box>
+        </Box>
+    );
 };

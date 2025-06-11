@@ -5,125 +5,129 @@ import { SqliteService } from '../services/SqliteService';
 import { Logger } from '@/shared/utils/logger';
 
 interface DatabaseSupplier {
-  supplier_code: string;
-  supplier_name: string;
-  created_at: string;
-  updated_at: string;
+    supplier_code: string;
+    supplier_name: string;
+    created_at: string;
+    updated_at: string;
 }
 
 export class SupplierRepository implements ISupplierRepository {
-  private logger = Logger.getInstance();
+    private logger = Logger.getInstance();
 
-  constructor(private sqliteService: SqliteService) {}
+    constructor(private sqliteService: SqliteService) {}
 
-  async upsertSupplier(supplier: Omit<Supplier, 'createdAt' | 'updatedAt'>): Promise<Supplier> {
-    try {
-      const existingSupplier = await this.getSupplierByCode(supplier.supplierCode);
-      
-      if (existingSupplier) {
-        await this.sqliteService.run(
-          'UPDATE supplier SET supplier_name = ?, updated_at = CURRENT_TIMESTAMP WHERE supplier_code = ?',
-          [supplier.supplierName, supplier.supplierCode]
-        );
-      } else {
-        await this.sqliteService.run(
-          'INSERT INTO supplier (supplier_code, supplier_name) VALUES (?, ?)',
-          [supplier.supplierCode, supplier.supplierName]
-        );
-      }
+    async upsertSupplier(supplier: Omit<Supplier, 'createdAt' | 'updatedAt'>): Promise<Supplier> {
+        try {
+            const existingSupplier = await this.getSupplierByCode(supplier.supplierCode);
 
-      const updatedSupplier = await this.getSupplierByCode(supplier.supplierCode);
-      if (!updatedSupplier) {
-        throw new Error(`Failed to retrieve upserted supplier: ${supplier.supplierCode}`);
-      }
+            if (existingSupplier) {
+                await this.sqliteService.run(
+                    'UPDATE supplier SET supplier_name = ?, updated_at = CURRENT_TIMESTAMP WHERE supplier_code = ?',
+                    [supplier.supplierName, supplier.supplierCode],
+                );
+            } else {
+                await this.sqliteService.run(
+                    'INSERT INTO supplier (supplier_code, supplier_name) VALUES (?, ?)',
+                    [supplier.supplierCode, supplier.supplierName],
+                );
+            }
 
-      return updatedSupplier;
-    } catch (error) {
-      this.logger.error(`Failed to upsert supplier ${supplier.supplierCode}:`, error as Error);
-      throw error;
-    }
-  }
+            const updatedSupplier = await this.getSupplierByCode(supplier.supplierCode);
+            if (!updatedSupplier) {
+                throw new Error(`Failed to retrieve upserted supplier: ${supplier.supplierCode}`);
+            }
 
-  async getSupplierByCode(supplierCode: string): Promise<Supplier | null> {
-    try {
-      const row = await this.sqliteService.get<DatabaseSupplier>(
-        'SELECT * FROM supplier WHERE supplier_code = ?',
-        [supplierCode]
-      );
-
-      if (!row) {
-        return null;
-      }
-
-      return this.mapDatabaseSupplierToEntity(row);
-    } catch (error) {
-      this.logger.error(`Failed to get supplier ${supplierCode}:`, error as Error);
-      return null;
-    }
-  }
-
-  async getAllSuppliers(): Promise<Supplier[]> {
-    try {
-      const rows = await this.sqliteService.all<DatabaseSupplier>(
-        'SELECT * FROM supplier ORDER BY supplier_name'
-      );
-
-      return rows.map(row => this.mapDatabaseSupplierToEntity(row));
-    } catch (error) {
-      this.logger.error('Failed to get all suppliers:', error as Error);
-      return [];
-    }
-  }
-
-  async deleteSupplier(supplierCode: string): Promise<boolean> {
-    try {
-      await this.sqliteService.run(
-        'DELETE FROM supplier WHERE supplier_code = ?',
-        [supplierCode]
-      );
-      return true;
-    } catch (error) {
-      this.logger.error(`Failed to delete supplier ${supplierCode}:`, error as Error);
-      return false;
-    }
-  }
-
-  async bulkUpsert(suppliers: Omit<Supplier, 'createdAt' | 'updatedAt'>[]): Promise<{ inserted: number; updated: number }> {
-    let inserted = 0;
-    let updated = 0;
-
-    try {
-      for (const supplier of suppliers) {
-        const existing = await this.getSupplierByCode(supplier.supplierCode);
-        if (existing) {
-          await this.sqliteService.run(
-            'UPDATE supplier SET supplier_name = ?, updated_at = CURRENT_TIMESTAMP WHERE supplier_code = ?',
-            [supplier.supplierName, supplier.supplierCode]
-          );
-          updated++;
-        } else {
-          await this.sqliteService.run(
-            'INSERT INTO supplier (supplier_code, supplier_name) VALUES (?, ?)',
-            [supplier.supplierCode, supplier.supplierName]
-          );
-          inserted++;
+            return updatedSupplier;
+        } catch (error) {
+            this.logger.error(
+                `Failed to upsert supplier ${supplier.supplierCode}:`,
+                error as Error,
+            );
+            throw error;
         }
-      }
-
-      this.logger.info(`Bulk upsert completed: ${inserted} inserted, ${updated} updated`);
-      return { inserted, updated };
-    } catch (error) {
-      this.logger.error('Failed to bulk upsert suppliers:', error as Error);
-      throw error;
     }
-  }
 
-  private mapDatabaseSupplierToEntity(dbSupplier: DatabaseSupplier): Supplier {
-    return {
-      supplierCode: dbSupplier.supplier_code,
-      supplierName: dbSupplier.supplier_name,
-      createdAt: new Date(dbSupplier.created_at),
-      updatedAt: new Date(dbSupplier.updated_at)
-    };
-  }
+    async getSupplierByCode(supplierCode: string): Promise<Supplier | null> {
+        try {
+            const row = await this.sqliteService.get<DatabaseSupplier>(
+                'SELECT * FROM supplier WHERE supplier_code = ?',
+                [supplierCode],
+            );
+
+            if (!row) {
+                return null;
+            }
+
+            return this.mapDatabaseSupplierToEntity(row);
+        } catch (error) {
+            this.logger.error(`Failed to get supplier ${supplierCode}:`, error as Error);
+            return null;
+        }
+    }
+
+    async getAllSuppliers(): Promise<Supplier[]> {
+        try {
+            const rows = await this.sqliteService.all<DatabaseSupplier>(
+                'SELECT * FROM supplier ORDER BY supplier_name',
+            );
+
+            return rows.map((row) => this.mapDatabaseSupplierToEntity(row));
+        } catch (error) {
+            this.logger.error('Failed to get all suppliers:', error as Error);
+            return [];
+        }
+    }
+
+    async deleteSupplier(supplierCode: string): Promise<boolean> {
+        try {
+            await this.sqliteService.run('DELETE FROM supplier WHERE supplier_code = ?', [
+                supplierCode,
+            ]);
+            return true;
+        } catch (error) {
+            this.logger.error(`Failed to delete supplier ${supplierCode}:`, error as Error);
+            return false;
+        }
+    }
+
+    async bulkUpsert(
+        suppliers: Omit<Supplier, 'createdAt' | 'updatedAt'>[],
+    ): Promise<{ inserted: number; updated: number }> {
+        let inserted = 0;
+        let updated = 0;
+
+        try {
+            for (const supplier of suppliers) {
+                const existing = await this.getSupplierByCode(supplier.supplierCode);
+                if (existing) {
+                    await this.sqliteService.run(
+                        'UPDATE supplier SET supplier_name = ?, updated_at = CURRENT_TIMESTAMP WHERE supplier_code = ?',
+                        [supplier.supplierName, supplier.supplierCode],
+                    );
+                    updated++;
+                } else {
+                    await this.sqliteService.run(
+                        'INSERT INTO supplier (supplier_code, supplier_name) VALUES (?, ?)',
+                        [supplier.supplierCode, supplier.supplierName],
+                    );
+                    inserted++;
+                }
+            }
+
+            this.logger.info(`Bulk upsert completed: ${inserted} inserted, ${updated} updated`);
+            return { inserted, updated };
+        } catch (error) {
+            this.logger.error('Failed to bulk upsert suppliers:', error as Error);
+            throw error;
+        }
+    }
+
+    private mapDatabaseSupplierToEntity(dbSupplier: DatabaseSupplier): Supplier {
+        return {
+            supplierCode: dbSupplier.supplier_code,
+            supplierName: dbSupplier.supplier_name,
+            createdAt: new Date(dbSupplier.created_at),
+            updatedAt: new Date(dbSupplier.updated_at),
+        };
+    }
 }
