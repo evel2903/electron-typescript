@@ -887,8 +887,7 @@ export const ImportPage: React.FC<ImportPageProps> = ({ connectedDevice }) => {
 
                     {/* Device Status Display */}
                     {connectedDevice && (
-                        <Card sx={{ mb: 3 }}>
-                            <CardContent>
+                        <Card sx={{ mb: 3, p: 2 }}>
                                 <Box display="flex" alignItems="center" gap={2}>
                                     <CheckCircle sx={{ color: 'success.main' }} />
                                     <Typography variant="h6">
@@ -907,7 +906,6 @@ export const ImportPage: React.FC<ImportPageProps> = ({ connectedDevice }) => {
                                         variant="outlined"
                                     />
                                 </Box>
-                            </CardContent>
                         </Card>
                     )}
 
