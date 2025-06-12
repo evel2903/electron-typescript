@@ -33,7 +33,7 @@ export interface AllData {
 
 export interface DateRangeFilter {
     fromDate: string; // Format: YYYY/MM/DD
-    toDate: string;   // Format: YYYY/MM/DD
+    toDate: string; // Format: YYYY/MM/DD
 }
 
 export interface FilteredDataCounts {
@@ -118,7 +118,9 @@ export class DataService {
         }
     }
 
-    async getTransactionDataByDateRange(dateRange: DateRangeFilter): Promise<FilteredTransactionData> {
+    async getTransactionDataByDateRange(
+        dateRange: DateRangeFilter,
+    ): Promise<FilteredTransactionData> {
         try {
             const [inventoryData, stockinData, stockoutData] = await Promise.all([
                 this.inventoryRepository.getByDateRange(dateRange.fromDate, dateRange.toDate),

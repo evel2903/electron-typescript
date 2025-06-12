@@ -13,7 +13,12 @@ import { StockinData } from '@/domain/entities/StockinData';
 import { StockoutData } from '@/domain/entities/StockoutData';
 import { ImportResult } from '@/domain/entities/ImportResult';
 import { FileParseResult, ImportFileType } from '@/application/services/DataImportService';
-import { DataCounts, AllData, FilteredDataCounts, FilteredTransactionData } from '@/application/services/DataService';
+import {
+    DataCounts,
+    AllData,
+    FilteredDataCounts,
+    FilteredTransactionData,
+} from '@/application/services/DataService';
 
 export interface SyncResult {
     tableName: string;
@@ -100,12 +105,12 @@ export interface ElectronAPI {
         getAllLocations(): Promise<Location[]>;
         getAllStaff(): Promise<Staff[]>;
         getAllSuppliers(): Promise<Supplier[]>;
-        
+
         // Individual count access
         getInventoryDataCount(): Promise<number>;
         getStockinDataCount(): Promise<number>;
         getStockoutDataCount(): Promise<number>;
-        
+
         // Aggregated service operations
         getDataCounts(): Promise<DataCounts>;
         getAllMasterData(): Promise<AllData>;
@@ -115,7 +120,10 @@ export interface ElectronAPI {
         getStockinDataByDateRange(fromDate: string, toDate: string): Promise<StockinData[]>;
         getStockoutDataByDateRange(fromDate: string, toDate: string): Promise<StockoutData[]>;
         getDataCountsByDateRange(fromDate: string, toDate: string): Promise<FilteredDataCounts>;
-        getTransactionDataByDateRange(fromDate: string, toDate: string): Promise<FilteredTransactionData>;
+        getTransactionDataByDateRange(
+            fromDate: string,
+            toDate: string,
+        ): Promise<FilteredTransactionData>;
     };
 }
 

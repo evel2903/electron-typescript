@@ -122,10 +122,10 @@ export class StockinDataRepository implements IStockinDataRepository {
     async getByDateRange(fromDate: string, toDate: string): Promise<StockinData[]> {
         try {
             this.logger.info(`Fetching stockin data from ${fromDate} to ${toDate}`);
-            
+
             const rows = await this.sqliteService.all<DatabaseStockinData>(
                 'SELECT * FROM stockin_data WHERE input_date >= ? AND input_date <= ? ORDER BY input_date DESC, created_at DESC',
-                [fromDate, toDate]
+                [fromDate, toDate],
             );
 
             const result = rows.map((row) => this.mapDatabaseStockinToEntity(row));
@@ -141,7 +141,7 @@ export class StockinDataRepository implements IStockinDataRepository {
         try {
             const result = await this.sqliteService.get<{ count: number }>(
                 'SELECT COUNT(*) as count FROM stockin_data WHERE input_date >= ? AND input_date <= ?',
-                [fromDate, toDate]
+                [fromDate, toDate],
             );
             return result?.count || 0;
         } catch (error) {

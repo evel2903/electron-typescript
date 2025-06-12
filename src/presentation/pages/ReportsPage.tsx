@@ -48,10 +48,12 @@ import {
     FilterList,
     Visibility,
     Close,
+    Category,
 } from '@mui/icons-material';
 import { InventoryData } from '@/domain/entities/InventoryData';
 import { StockinData } from '@/domain/entities/StockinData';
 import { StockoutData } from '@/domain/entities/StockoutData';
+import { Product } from '@/domain/entities/Product';
 import { RendererDataService } from '@/application/services/DIContainer';
 
 interface TabPanelProps {
@@ -76,17 +78,30 @@ function TabPanel(props: TabPanelProps) {
     );
 }
 
+interface ProductStatus extends Product {
+    latestInventoryDate: string;
+    totalQuantity: number;
+    totalSystemQuantity: number;
+    totalDiscrepancy: number;
+    recentStockin: number;
+    recentStockout: number;
+    averageCost: number;
+    lastPrice: number;
+    status: 'Balanced' | 'Surplus' | 'Deficit';
+}
+
 export const ReportsPage: React.FC = () => {
     const [currentTab, setCurrentTab] = useState<number>(0);
     const [fromDate, setFromDate] = useState<string>('');
     const [toDate, setToDate] = useState<string>('');
     const [loading, setLoading] = useState<boolean>(false);
     const [error, setError] = useState<string | null>(null);
-    
+
     // Data states
     const [inventoryData, setInventoryData] = useState<InventoryData[]>([]);
     const [stockinData, setStockinData] = useState<StockinData[]>([]);
     const [stockoutData, setStockoutData] = useState<StockoutData[]>([]);
+    const [productsData, setProductsData] = useState<Product[]>([]);
     const [dataCounts, setDataCounts] = useState<{
         inventory: number;
         stockin: number;
@@ -97,13 +112,14 @@ export const ReportsPage: React.FC = () => {
     const [inventoryPage, setInventoryPage] = useState(0);
     const [stockinPage, setStockinPage] = useState(0);
     const [stockoutPage, setStockoutPage] = useState(0);
+    const [productPage, setProductPage] = useState(0);
     const [rowsPerPage, setRowsPerPage] = useState(25);
 
     // Detail dialog state
     const [detailDialog, setDetailDialog] = useState<{
         open: boolean;
         data: any;
-        type: 'inventory' | 'stockin' | 'stockout';
+        type: 'inventory' | 'stockin' | 'stockout' | 'product';
     }>({ open: false, data: null, type: 'inventory' });
 
     // Filter states
@@ -154,22 +170,26 @@ export const ReportsPage: React.FC = () => {
             const apiToDate = formatDateForAPI(toDate);
 
             // Load all data in parallel
-            const [inventoryResult, stockinResult, stockoutResult, countsResult] = await Promise.all([
-                dataService.getInventoryDataByDateRange(apiFromDate, apiToDate),
-                dataService.getStockinDataByDateRange(apiFromDate, apiToDate),
-                dataService.getStockoutDataByDateRange(apiFromDate, apiToDate),
-                dataService.getDataCountsByDateRange(apiFromDate, apiToDate),
-            ]);
+            const [inventoryResult, stockinResult, stockoutResult, countsResult, productsResult] =
+                await Promise.all([
+                    dataService.getInventoryDataByDateRange(apiFromDate, apiToDate),
+                    dataService.getStockinDataByDateRange(apiFromDate, apiToDate),
+                    dataService.getStockoutDataByDateRange(apiFromDate, apiToDate),
+                    dataService.getDataCountsByDateRange(apiFromDate, apiToDate),
+                    dataService.getProducts(),
+                ]);
 
             setInventoryData(inventoryResult);
             setStockinData(stockinResult);
             setStockoutData(stockoutResult);
             setDataCounts(countsResult);
+            setProductsData(productsResult);
 
             // Reset pagination when data changes
             setInventoryPage(0);
             setStockinPage(0);
             setStockoutPage(0);
+            setProductPage(0);
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Failed to load report data');
         } finally {
@@ -194,7 +214,10 @@ export const ReportsPage: React.FC = () => {
         setToDate(formatDateForInput(today));
     };
 
-    const openDetailDialog = (data: any, type: 'inventory' | 'stockin' | 'stockout') => {
+    const openDetailDialog = (
+        data: any,
+        type: 'inventory' | 'stockin' | 'stockout' | 'product',
+    ) => {
         setDetailDialog({ open: true, data, type });
     };
 
@@ -202,17 +225,32 @@ export const ReportsPage: React.FC = () => {
         setDetailDialog({ open: false, data: null, type: 'inventory' });
     };
 
-    const getFilteredData = (data: any[], type: 'inventory' | 'stockin' | 'stockout') => {
+    const getFilteredData = (
+        data: any[],
+        type: 'inventory' | 'stockin' | 'stockout' | 'product',
+    ) => {
         return data.filter((item) => {
-            const staffMatch = !filters.staffCode || item.staffCode?.toLowerCase().includes(filters.staffCode.toLowerCase());
-            const shopMatch = !filters.shopCode || item.shopCode?.toLowerCase().includes(filters.shopCode.toLowerCase());
-            
+            const staffMatch =
+                !filters.staffCode ||
+                item.staffCode?.toLowerCase().includes(filters.staffCode.toLowerCase());
+            const shopMatch =
+                !filters.shopCode ||
+                item.shopCode?.toLowerCase().includes(filters.shopCode.toLowerCase());
+
             let productMatch = true;
             if (filters.productCode) {
                 if (type === 'inventory') {
-                    productMatch = item.janCode?.toLowerCase().includes(filters.productCode.toLowerCase());
+                    productMatch = item.janCode
+                        ?.toLowerCase()
+                        .includes(filters.productCode.toLowerCase());
+                } else if (type === 'product') {
+                    productMatch =
+                        item.janCode?.toLowerCase().includes(filters.productCode.toLowerCase()) ||
+                        item.productName?.toLowerCase().includes(filters.productCode.toLowerCase());
                 } else {
-                    productMatch = item.productCode?.toLowerCase().includes(filters.productCode.toLowerCase());
+                    productMatch = item.productCode
+                        ?.toLowerCase()
+                        .includes(filters.productCode.toLowerCase());
                 }
             }
 
@@ -224,7 +262,7 @@ export const ReportsPage: React.FC = () => {
         const filteredData = getFilteredData(inventoryData, 'inventory');
         const paginatedData = filteredData.slice(
             inventoryPage * rowsPerPage,
-            inventoryPage * rowsPerPage + rowsPerPage
+            inventoryPage * rowsPerPage + rowsPerPage,
         );
 
         return (
@@ -233,16 +271,36 @@ export const ReportsPage: React.FC = () => {
                     <Table size="small">
                         <TableHead>
                             <TableRow sx={{ backgroundColor: '#f5f5f5' }}>
-                                <TableCell><strong>Date</strong></TableCell>
-                                <TableCell><strong>Staff</strong></TableCell>
-                                <TableCell><strong>Shop</strong></TableCell>
-                                <TableCell><strong>Location</strong></TableCell>
-                                <TableCell><strong>JAN Code</strong></TableCell>
-                                <TableCell align="right"><strong>Quantity</strong></TableCell>
-                                <TableCell align="right"><strong>System Qty</strong></TableCell>
-                                <TableCell align="right"><strong>Discrepancy</strong></TableCell>
-                                <TableCell align="right"><strong>Cost</strong></TableCell>
-                                <TableCell><strong>Actions</strong></TableCell>
+                                <TableCell>
+                                    <strong>Date</strong>
+                                </TableCell>
+                                <TableCell>
+                                    <strong>Staff</strong>
+                                </TableCell>
+                                <TableCell>
+                                    <strong>Shop</strong>
+                                </TableCell>
+                                <TableCell>
+                                    <strong>Location</strong>
+                                </TableCell>
+                                <TableCell>
+                                    <strong>JAN Code</strong>
+                                </TableCell>
+                                <TableCell align="right">
+                                    <strong>Quantity</strong>
+                                </TableCell>
+                                <TableCell align="right">
+                                    <strong>System Qty</strong>
+                                </TableCell>
+                                <TableCell align="right">
+                                    <strong>Discrepancy</strong>
+                                </TableCell>
+                                <TableCell align="right">
+                                    <strong>Cost</strong>
+                                </TableCell>
+                                <TableCell>
+                                    <strong>Actions</strong>
+                                </TableCell>
                             </TableRow>
                         </TableHead>
                         <TableBody>
@@ -253,16 +311,26 @@ export const ReportsPage: React.FC = () => {
                                     <TableCell>{item.shopCode}</TableCell>
                                     <TableCell>{`${item.shelfNumber}-${item.shelfPosition}`}</TableCell>
                                     <TableCell>{item.janCode || 'N/A'}</TableCell>
-                                    <TableCell align="right">{item.quantity.toLocaleString()}</TableCell>
-                                    <TableCell align="right">{item.systemQuantity.toLocaleString()}</TableCell>
+                                    <TableCell align="right">
+                                        {item.quantity.toLocaleString()}
+                                    </TableCell>
+                                    <TableCell align="right">
+                                        {item.systemQuantity.toLocaleString()}
+                                    </TableCell>
                                     <TableCell align="right">
                                         <Chip
                                             label={item.quantityDiscrepancy}
                                             size="small"
-                                            color={item.quantityDiscrepancy === 0 ? 'success' : 'warning'}
+                                            color={
+                                                item.quantityDiscrepancy === 0
+                                                    ? 'success'
+                                                    : 'warning'
+                                            }
                                         />
                                     </TableCell>
-                                    <TableCell align="right">¥{item.cost.toLocaleString()}</TableCell>
+                                    <TableCell align="right">
+                                        ¥{item.cost.toLocaleString()}
+                                    </TableCell>
                                     <TableCell>
                                         <IconButton
                                             size="small"
@@ -296,7 +364,7 @@ export const ReportsPage: React.FC = () => {
         const filteredData = getFilteredData(stockinData, 'stockin');
         const paginatedData = filteredData.slice(
             stockinPage * rowsPerPage,
-            stockinPage * rowsPerPage + rowsPerPage
+            stockinPage * rowsPerPage + rowsPerPage,
         );
 
         return (
@@ -305,15 +373,33 @@ export const ReportsPage: React.FC = () => {
                     <Table size="small">
                         <TableHead>
                             <TableRow sx={{ backgroundColor: '#f5f5f5' }}>
-                                <TableCell><strong>Date</strong></TableCell>
-                                <TableCell><strong>Slip Number</strong></TableCell>
-                                <TableCell><strong>Supplier</strong></TableCell>
-                                <TableCell><strong>Product Code</strong></TableCell>
-                                <TableCell><strong>Location</strong></TableCell>
-                                <TableCell align="right"><strong>Quantity</strong></TableCell>
-                                <TableCell><strong>Staff</strong></TableCell>
-                                <TableCell><strong>Shop</strong></TableCell>
-                                <TableCell><strong>Actions</strong></TableCell>
+                                <TableCell>
+                                    <strong>Date</strong>
+                                </TableCell>
+                                <TableCell>
+                                    <strong>Slip Number</strong>
+                                </TableCell>
+                                <TableCell>
+                                    <strong>Supplier</strong>
+                                </TableCell>
+                                <TableCell>
+                                    <strong>Product Code</strong>
+                                </TableCell>
+                                <TableCell>
+                                    <strong>Location</strong>
+                                </TableCell>
+                                <TableCell align="right">
+                                    <strong>Quantity</strong>
+                                </TableCell>
+                                <TableCell>
+                                    <strong>Staff</strong>
+                                </TableCell>
+                                <TableCell>
+                                    <strong>Shop</strong>
+                                </TableCell>
+                                <TableCell>
+                                    <strong>Actions</strong>
+                                </TableCell>
                             </TableRow>
                         </TableHead>
                         <TableBody>
@@ -321,10 +407,14 @@ export const ReportsPage: React.FC = () => {
                                 <TableRow key={index} hover>
                                     <TableCell>{item.inputDate}</TableCell>
                                     <TableCell>{item.slipNumber}</TableCell>
-                                    <TableCell>{item.supplierName || item.supplierCode || 'N/A'}</TableCell>
+                                    <TableCell>
+                                        {item.supplierName || item.supplierCode || 'N/A'}
+                                    </TableCell>
                                     <TableCell>{item.productCode}</TableCell>
                                     <TableCell>{`${item.location} ${item.shelfNo}-${item.shelfPosition}`}</TableCell>
-                                    <TableCell align="right">{item.quantity.toLocaleString()}</TableCell>
+                                    <TableCell align="right">
+                                        {item.quantity.toLocaleString()}
+                                    </TableCell>
                                     <TableCell>{item.staffCode}</TableCell>
                                     <TableCell>{item.shopCode}</TableCell>
                                     <TableCell>
@@ -360,7 +450,7 @@ export const ReportsPage: React.FC = () => {
         const filteredData = getFilteredData(stockoutData, 'stockout');
         const paginatedData = filteredData.slice(
             stockoutPage * rowsPerPage,
-            stockoutPage * rowsPerPage + rowsPerPage
+            stockoutPage * rowsPerPage + rowsPerPage,
         );
 
         return (
@@ -369,15 +459,33 @@ export const ReportsPage: React.FC = () => {
                     <Table size="small">
                         <TableHead>
                             <TableRow sx={{ backgroundColor: '#f5f5f5' }}>
-                                <TableCell><strong>Date</strong></TableCell>
-                                <TableCell><strong>Slip Number</strong></TableCell>
-                                <TableCell><strong>Department</strong></TableCell>
-                                <TableCell><strong>Product Code</strong></TableCell>
-                                <TableCell><strong>Location</strong></TableCell>
-                                <TableCell align="right"><strong>Quantity</strong></TableCell>
-                                <TableCell><strong>Staff</strong></TableCell>
-                                <TableCell><strong>Shop</strong></TableCell>
-                                <TableCell><strong>Actions</strong></TableCell>
+                                <TableCell>
+                                    <strong>Date</strong>
+                                </TableCell>
+                                <TableCell>
+                                    <strong>Slip Number</strong>
+                                </TableCell>
+                                <TableCell>
+                                    <strong>Department</strong>
+                                </TableCell>
+                                <TableCell>
+                                    <strong>Product Code</strong>
+                                </TableCell>
+                                <TableCell>
+                                    <strong>Location</strong>
+                                </TableCell>
+                                <TableCell align="right">
+                                    <strong>Quantity</strong>
+                                </TableCell>
+                                <TableCell>
+                                    <strong>Staff</strong>
+                                </TableCell>
+                                <TableCell>
+                                    <strong>Shop</strong>
+                                </TableCell>
+                                <TableCell>
+                                    <strong>Actions</strong>
+                                </TableCell>
                             </TableRow>
                         </TableHead>
                         <TableBody>
@@ -388,7 +496,9 @@ export const ReportsPage: React.FC = () => {
                                     <TableCell>{`${item.deptCode} - ${item.deptName}`}</TableCell>
                                     <TableCell>{item.productCode}</TableCell>
                                     <TableCell>{`${item.location} ${item.shelfNo}-${item.shelfPosition}`}</TableCell>
-                                    <TableCell align="right">{item.quantity.toLocaleString()}</TableCell>
+                                    <TableCell align="right">
+                                        {item.quantity.toLocaleString()}
+                                    </TableCell>
                                     <TableCell>{item.staffCode}</TableCell>
                                     <TableCell>{item.shopCode}</TableCell>
                                     <TableCell>
@@ -414,6 +524,171 @@ export const ReportsPage: React.FC = () => {
                     onRowsPerPageChange={(e) => {
                         setRowsPerPage(parseInt(e.target.value, 10));
                         setStockoutPage(0);
+                    }}
+                />
+            </Box>
+        );
+    };
+
+    const renderProductStatusTable = () => {
+        const filteredData = getFilteredData(productsData, 'product');
+
+        // Calculate product status from inventory data
+        const productStatusData: ProductStatus[] = filteredData.map((product) => {
+            // Find latest inventory data for this product
+            const productInventoryData = inventoryData.filter(
+                (inv) => inv.janCode === product.janCode,
+            );
+            const latestInventory = productInventoryData.sort(
+                (a, b) => new Date(b.inputDate).getTime() - new Date(a.inputDate).getTime(),
+            )[0];
+
+            // Calculate total quantity from all inventory records
+            const totalQuantity = productInventoryData.reduce((sum, inv) => sum + inv.quantity, 0);
+            const totalSystemQuantity = productInventoryData.reduce(
+                (sum, inv) => sum + inv.systemQuantity,
+                0,
+            );
+            const totalDiscrepancy = totalQuantity - totalSystemQuantity;
+
+            // Find recent stock movements
+            const recentStockin = stockinData.filter(
+                (si) => si.productCode === product.janCode,
+            ).length;
+            const recentStockout = stockoutData.filter(
+                (so) => so.productCode === product.janCode,
+            ).length;
+
+            return {
+                ...product,
+                latestInventoryDate: latestInventory?.inputDate || 'No data',
+                totalQuantity,
+                totalSystemQuantity,
+                totalDiscrepancy,
+                recentStockin,
+                recentStockout,
+                averageCost: latestInventory?.cost || 0,
+                lastPrice: latestInventory?.price || 0,
+                status:
+                    totalDiscrepancy === 0
+                        ? 'Balanced'
+                        : totalDiscrepancy > 0
+                          ? 'Surplus'
+                          : 'Deficit',
+            };
+        });
+
+        const paginatedData = productStatusData.slice(
+            productPage * rowsPerPage,
+            productPage * rowsPerPage + rowsPerPage,
+        );
+
+        return (
+            <Box>
+                <TableContainer component={Paper} elevation={1}>
+                    <Table size="small">
+                        <TableHead>
+                            <TableRow sx={{ backgroundColor: '#f5f5f5' }}>
+                                <TableCell>
+                                    <strong>JAN Code</strong>
+                                </TableCell>
+                                <TableCell>
+                                    <strong>Product Name</strong>
+                                </TableCell>
+                                <TableCell>
+                                    <strong>Supplier</strong>
+                                </TableCell>
+                                <TableCell align="right">
+                                    <strong>Box Qty</strong>
+                                </TableCell>
+                                <TableCell align="right">
+                                    <strong>Current Stock</strong>
+                                </TableCell>
+                                <TableCell align="right">
+                                    <strong>System Stock</strong>
+                                </TableCell>
+                                <TableCell align="center">
+                                    <strong>Status</strong>
+                                </TableCell>
+                                <TableCell>
+                                    <strong>Last Inventory</strong>
+                                </TableCell>
+                                <TableCell align="right">
+                                    <strong>Recent In/Out</strong>
+                                </TableCell>
+                                <TableCell>
+                                    <strong>Actions</strong>
+                                </TableCell>
+                            </TableRow>
+                        </TableHead>
+                        <TableBody>
+                            {paginatedData.map((item, index) => (
+                                <TableRow key={index} hover>
+                                    <TableCell>{item.janCode}</TableCell>
+                                    <TableCell>{item.productName}</TableCell>
+                                    <TableCell>{item.supplierCode || 'N/A'}</TableCell>
+                                    <TableCell align="right">
+                                        {item.boxQuantity.toLocaleString()}
+                                    </TableCell>
+                                    <TableCell align="right">
+                                        {item.totalQuantity.toLocaleString()}
+                                    </TableCell>
+                                    <TableCell align="right">
+                                        {item.totalSystemQuantity.toLocaleString()}
+                                    </TableCell>
+                                    <TableCell align="center">
+                                        <Chip
+                                            label={item.status}
+                                            size="small"
+                                            color={
+                                                item.status === 'Balanced'
+                                                    ? 'success'
+                                                    : item.status === 'Surplus'
+                                                      ? 'warning'
+                                                      : 'error'
+                                            }
+                                        />
+                                    </TableCell>
+                                    <TableCell>{item.latestInventoryDate}</TableCell>
+                                    <TableCell align="right">
+                                        <Box display="flex" gap={1}>
+                                            <Chip
+                                                label={`+${item.recentStockin}`}
+                                                size="small"
+                                                color="success"
+                                                variant="outlined"
+                                            />
+                                            <Chip
+                                                label={`-${item.recentStockout}`}
+                                                size="small"
+                                                color="error"
+                                                variant="outlined"
+                                            />
+                                        </Box>
+                                    </TableCell>
+                                    <TableCell>
+                                        <IconButton
+                                            size="small"
+                                            onClick={() => openDetailDialog(item, 'product')}
+                                        >
+                                            <Visibility />
+                                        </IconButton>
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                </TableContainer>
+                <TablePagination
+                    rowsPerPageOptions={[10, 25, 50, 100]}
+                    component="div"
+                    count={productStatusData.length}
+                    rowsPerPage={rowsPerPage}
+                    page={productPage}
+                    onPageChange={(_, newPage) => setProductPage(newPage)}
+                    onRowsPerPageChange={(e) => {
+                        setRowsPerPage(parseInt(e.target.value, 10));
+                        setProductPage(0);
                     }}
                 />
             </Box>
@@ -476,6 +751,45 @@ export const ReportsPage: React.FC = () => {
                         { label: 'Note', value: data.note || 'N/A' },
                         { label: 'Ignore Trigger', value: data.ignoreTrigger ? 'Yes' : 'No' },
                     ];
+                case 'product':
+                    return [
+                        { label: 'JAN Code', value: data.janCode },
+                        { label: 'Product Name', value: data.productName },
+                        { label: 'Supplier Code', value: data.supplierCode || 'N/A' },
+                        { label: 'Box Quantity', value: data.boxQuantity.toLocaleString() },
+                        {
+                            label: 'Current Stock',
+                            value: data.totalQuantity?.toLocaleString() || '0',
+                        },
+                        {
+                            label: 'System Stock',
+                            value: data.totalSystemQuantity?.toLocaleString() || '0',
+                        },
+                        {
+                            label: 'Discrepancy',
+                            value: data.totalDiscrepancy?.toLocaleString() || '0',
+                        },
+                        { label: 'Status', value: data.status || 'Unknown' },
+                        { label: 'Recent Stock In', value: data.recentStockin?.toString() || '0' },
+                        {
+                            label: 'Recent Stock Out',
+                            value: data.recentStockout?.toString() || '0',
+                        },
+                        {
+                            label: 'Last Inventory Date',
+                            value: data.latestInventoryDate || 'No data',
+                        },
+                        {
+                            label: 'Average Cost',
+                            value: data.averageCost
+                                ? `¥${data.averageCost.toLocaleString()}`
+                                : 'N/A',
+                        },
+                        {
+                            label: 'Last Price',
+                            value: data.lastPrice ? `¥${data.lastPrice.toLocaleString()}` : 'N/A',
+                        },
+                    ];
                 default:
                     return [];
             }
@@ -483,10 +797,16 @@ export const ReportsPage: React.FC = () => {
 
         const getTitle = () => {
             switch (type) {
-                case 'inventory': return 'Inventory Record Details';
-                case 'stockin': return 'Stock In Record Details';
-                case 'stockout': return 'Stock Out Record Details';
-                default: return 'Record Details';
+                case 'inventory':
+                    return 'Inventory Record Details';
+                case 'stockin':
+                    return 'Stock In Record Details';
+                case 'stockout':
+                    return 'Stock Out Record Details';
+                case 'product':
+                    return 'Product Status Details';
+                default:
+                    return 'Record Details';
             }
         };
 
@@ -553,7 +873,7 @@ export const ReportsPage: React.FC = () => {
                                 <DateRange sx={{ mr: 1, verticalAlign: 'middle' }} />
                                 Date Range Selection
                             </Typography>
-                            
+
                             <Grid container spacing={2} alignItems="center">
                                 <Grid item xs={12} sm={3}>
                                     <TextField
@@ -579,13 +899,25 @@ export const ReportsPage: React.FC = () => {
                                 </Grid>
                                 <Grid item xs={12} sm={6}>
                                     <Box display="flex" gap={1} flexWrap="wrap">
-                                        <Button size="small" variant="outlined" onClick={() => handleQuickDateRange(7)}>
+                                        <Button
+                                            size="small"
+                                            variant="outlined"
+                                            onClick={() => handleQuickDateRange(7)}
+                                        >
                                             Last 7 Days
                                         </Button>
-                                        <Button size="small" variant="outlined" onClick={() => handleQuickDateRange(30)}>
+                                        <Button
+                                            size="small"
+                                            variant="outlined"
+                                            onClick={() => handleQuickDateRange(30)}
+                                        >
                                             Last 30 Days
                                         </Button>
-                                        <Button size="small" variant="outlined" onClick={() => handleQuickDateRange(90)}>
+                                        <Button
+                                            size="small"
+                                            variant="outlined"
+                                            onClick={() => handleQuickDateRange(90)}
+                                        >
                                             Last 90 Days
                                         </Button>
                                     </Box>
@@ -600,7 +932,9 @@ export const ReportsPage: React.FC = () => {
                             <Card sx={{ bgcolor: '#e3f2fd' }}>
                                 <CardContent>
                                     <Box display="flex" alignItems="center">
-                                        <Inventory sx={{ mr: 2, color: 'primary.main', fontSize: 40 }} />
+                                        <Inventory
+                                            sx={{ mr: 2, color: 'primary.main', fontSize: 40 }}
+                                        />
                                         <Box>
                                             <Typography variant="h4" color="primary">
                                                 {dataCounts.inventory.toLocaleString()}
@@ -617,7 +951,9 @@ export const ReportsPage: React.FC = () => {
                             <Card sx={{ bgcolor: '#e8f5e8' }}>
                                 <CardContent>
                                     <Box display="flex" alignItems="center">
-                                        <Input sx={{ mr: 2, color: 'success.main', fontSize: 40 }} />
+                                        <Input
+                                            sx={{ mr: 2, color: 'success.main', fontSize: 40 }}
+                                        />
                                         <Box>
                                             <Typography variant="h4" color="success.main">
                                                 {dataCounts.stockin.toLocaleString()}
@@ -656,14 +992,16 @@ export const ReportsPage: React.FC = () => {
                                 <FilterList sx={{ mr: 1, verticalAlign: 'middle' }} />
                                 Filters
                             </Typography>
-                            
+
                             <Grid container spacing={2}>
                                 <Grid item xs={12} sm={4}>
                                     <TextField
                                         fullWidth
                                         label="Staff Code"
                                         value={filters.staffCode}
-                                        onChange={(e) => setFilters({...filters, staffCode: e.target.value})}
+                                        onChange={(e) =>
+                                            setFilters({ ...filters, staffCode: e.target.value })
+                                        }
                                         size="small"
                                         placeholder="Filter by staff code"
                                     />
@@ -673,7 +1011,9 @@ export const ReportsPage: React.FC = () => {
                                         fullWidth
                                         label="Shop Code"
                                         value={filters.shopCode}
-                                        onChange={(e) => setFilters({...filters, shopCode: e.target.value})}
+                                        onChange={(e) =>
+                                            setFilters({ ...filters, shopCode: e.target.value })
+                                        }
                                         size="small"
                                         placeholder="Filter by shop code"
                                     />
@@ -683,7 +1023,9 @@ export const ReportsPage: React.FC = () => {
                                         fullWidth
                                         label="Product Code"
                                         value={filters.productCode}
-                                        onChange={(e) => setFilters({...filters, productCode: e.target.value})}
+                                        onChange={(e) =>
+                                            setFilters({ ...filters, productCode: e.target.value })
+                                        }
                                         size="small"
                                         placeholder="Filter by product/JAN code"
                                     />
@@ -711,19 +1053,24 @@ export const ReportsPage: React.FC = () => {
                         <Card>
                             <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
                                 <Tabs value={currentTab} onChange={handleTabChange}>
-                                    <Tab 
+                                    <Tab
                                         label={`Inventory (${getFilteredData(inventoryData, 'inventory').length})`}
                                         icon={<Inventory />}
                                         iconPosition="start"
                                     />
-                                    <Tab 
+                                    <Tab
                                         label={`Stock In (${getFilteredData(stockinData, 'stockin').length})`}
                                         icon={<Input />}
                                         iconPosition="start"
                                     />
-                                    <Tab 
+                                    <Tab
                                         label={`Stock Out (${getFilteredData(stockoutData, 'stockout').length})`}
                                         icon={<Output />}
+                                        iconPosition="start"
+                                    />
+                                    <Tab
+                                        label={`Product Status (${getFilteredData(productsData, 'product').length})`}
+                                        icon={<Category />}
                                         iconPosition="start"
                                     />
                                 </Tabs>
@@ -739,6 +1086,10 @@ export const ReportsPage: React.FC = () => {
 
                             <TabPanel value={currentTab} index={2}>
                                 {renderStockoutTable()}
+                            </TabPanel>
+
+                            <TabPanel value={currentTab} index={3}>
+                                {renderProductStatusTable()}
                             </TabPanel>
                         </Card>
                     )}

@@ -1,12 +1,12 @@
-import { DataCounts, AllData } from "@/application/services/DataService";
-import { AndroidDevice } from "@/domain/entities/AndroidDevice";
-import { DeviceFile } from "@/domain/entities/DeviceFile";
-import { FileTransferResult } from "@/domain/entities/FileTransferResult";
-import { Setting } from "@/domain/entities/Setting";
-import { Staff } from "@/domain/entities/Staff";
-import { Supplier } from "@/domain/entities/Supplier";
-import { Product } from "electron";
-import { SettingKey } from "../constants/settings";
+import { DataCounts, AllData } from '@/application/services/DataService';
+import { AndroidDevice } from '@/domain/entities/AndroidDevice';
+import { DeviceFile } from '@/domain/entities/DeviceFile';
+import { FileTransferResult } from '@/domain/entities/FileTransferResult';
+import { Setting } from '@/domain/entities/Setting';
+import { Staff } from '@/domain/entities/Staff';
+import { Supplier } from '@/domain/entities/Supplier';
+import { Product } from 'electron';
+import { SettingKey } from '../constants/settings';
 
 // src/shared/types/services.ts - New file for service layer types
 export interface IDataService {

@@ -140,7 +140,7 @@ export const ImportPage: React.FC<ImportPageProps> = ({ connectedDevice }) => {
 
     useEffect(() => {
         // Refresh data counts after successful imports
-        if (importResults.length > 0 && importResults.some(result => result.success)) {
+        if (importResults.length > 0 && importResults.some((result) => result.success)) {
             loadDataCounts();
         }
     }, [importResults]);
@@ -724,7 +724,12 @@ export const ImportPage: React.FC<ImportPageProps> = ({ connectedDevice }) => {
                     {/* Current Data Overview */}
                     <Card sx={{ mb: 3 }}>
                         <CardContent>
-                            <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
+                            <Box
+                                display="flex"
+                                alignItems="center"
+                                justifyContent="space-between"
+                                mb={2}
+                            >
                                 <Box display="flex" alignItems="center" gap={2}>
                                     <Assessment sx={{ color: 'primary.main' }} />
                                     <Typography variant="h6">Current Database Status</Typography>
@@ -732,7 +737,9 @@ export const ImportPage: React.FC<ImportPageProps> = ({ connectedDevice }) => {
                                 <Button
                                     variant="outlined"
                                     size="small"
-                                    startIcon={loadingCounts ? <CircularProgress size={16} /> : <Refresh />}
+                                    startIcon={
+                                        loadingCounts ? <CircularProgress size={16} /> : <Refresh />
+                                    }
                                     onClick={handleRefreshCounts}
                                     disabled={loadingCounts || transferring || importing}
                                 >
@@ -747,7 +754,13 @@ export const ImportPage: React.FC<ImportPageProps> = ({ connectedDevice }) => {
                             ) : dataCounts ? (
                                 <Grid container spacing={2}>
                                     <Grid item xs={6} md={3}>
-                                        <Box textAlign="center" p={1} border={1} borderColor="divider" borderRadius={1}>
+                                        <Box
+                                            textAlign="center"
+                                            p={1}
+                                            border={1}
+                                            borderColor="divider"
+                                            borderRadius={1}
+                                        >
                                             <Typography variant="h5" color="primary">
                                                 {dataCounts.products.toLocaleString()}
                                             </Typography>
@@ -757,7 +770,13 @@ export const ImportPage: React.FC<ImportPageProps> = ({ connectedDevice }) => {
                                         </Box>
                                     </Grid>
                                     <Grid item xs={6} md={3}>
-                                        <Box textAlign="center" p={1} border={1} borderColor="divider" borderRadius={1}>
+                                        <Box
+                                            textAlign="center"
+                                            p={1}
+                                            border={1}
+                                            borderColor="divider"
+                                            borderRadius={1}
+                                        >
                                             <Typography variant="h5" color="primary">
                                                 {dataCounts.locations.toLocaleString()}
                                             </Typography>
@@ -767,7 +786,13 @@ export const ImportPage: React.FC<ImportPageProps> = ({ connectedDevice }) => {
                                         </Box>
                                     </Grid>
                                     <Grid item xs={6} md={3}>
-                                        <Box textAlign="center" p={1} border={1} borderColor="divider" borderRadius={1}>
+                                        <Box
+                                            textAlign="center"
+                                            p={1}
+                                            border={1}
+                                            borderColor="divider"
+                                            borderRadius={1}
+                                        >
                                             <Typography variant="h5" color="primary">
                                                 {dataCounts.staff.toLocaleString()}
                                             </Typography>
@@ -777,7 +802,13 @@ export const ImportPage: React.FC<ImportPageProps> = ({ connectedDevice }) => {
                                         </Box>
                                     </Grid>
                                     <Grid item xs={6} md={3}>
-                                        <Box textAlign="center" p={1} border={1} borderColor="divider" borderRadius={1}>
+                                        <Box
+                                            textAlign="center"
+                                            p={1}
+                                            border={1}
+                                            borderColor="divider"
+                                            borderRadius={1}
+                                        >
                                             <Typography variant="h5" color="primary">
                                                 {dataCounts.suppliers.toLocaleString()}
                                             </Typography>
@@ -888,24 +919,24 @@ export const ImportPage: React.FC<ImportPageProps> = ({ connectedDevice }) => {
                     {/* Device Status Display */}
                     {connectedDevice && (
                         <Card sx={{ mb: 3, p: 2 }}>
-                                <Box display="flex" alignItems="center" gap={2}>
-                                    <CheckCircle sx={{ color: 'success.main' }} />
-                                    <Typography variant="h6">
-                                        Ready to process files with{' '}
-                                        {connectedDevice.model || connectedDevice.serialNumber}
-                                    </Typography>
-                                    <Chip
-                                        label={`Target: ${importPath}/Import`}
-                                        size="small"
-                                        variant="outlined"
-                                    />
-                                    <Chip
-                                        label="Database Import Enabled"
-                                        size="small"
-                                        color="primary"
-                                        variant="outlined"
-                                    />
-                                </Box>
+                            <Box display="flex" alignItems="center" gap={2}>
+                                <CheckCircle sx={{ color: 'success.main' }} />
+                                <Typography variant="h6">
+                                    Ready to process files with{' '}
+                                    {connectedDevice.model || connectedDevice.serialNumber}
+                                </Typography>
+                                <Chip
+                                    label={`Target: ${importPath}/Import`}
+                                    size="small"
+                                    variant="outlined"
+                                />
+                                <Chip
+                                    label="Database Import Enabled"
+                                    size="small"
+                                    color="primary"
+                                    variant="outlined"
+                                />
+                            </Box>
                         </Card>
                     )}
 

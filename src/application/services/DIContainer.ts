@@ -181,7 +181,10 @@ export class RendererDataService {
      * @param toDate End date in YYYY/MM/DD format (e.g., '2025/05/15')
      * @returns Promise containing arrays of filtered transaction records
      */
-    async getTransactionDataByDateRange(fromDate: string, toDate: string): Promise<FilteredTransactionData> {
+    async getTransactionDataByDateRange(
+        fromDate: string,
+        toDate: string,
+    ): Promise<FilteredTransactionData> {
         try {
             return await window.electronAPI.data.getTransactionDataByDateRange(fromDate, toDate);
         } catch (error) {
@@ -388,7 +391,7 @@ export class RendererDataService {
         if (typeof date === 'string') {
             return date;
         }
-        
+
         const year = date.getFullYear();
         const month = date.getMonth() + 1;
         const day = date.getDate();
@@ -401,7 +404,10 @@ export class RendererDataService {
      * @param period Predefined period ('week', 'month', 'quarter', 'year')
      * @returns Object containing fromDate and toDate in YYYY/MM/DD format
      */
-    getCommonDateRange(period: 'week' | 'month' | 'quarter' | 'year'): { fromDate: string; toDate: string } {
+    getCommonDateRange(period: 'week' | 'month' | 'quarter' | 'year'): {
+        fromDate: string;
+        toDate: string;
+    } {
         const today = new Date();
         const startDate = new Date(today);
 

@@ -125,10 +125,10 @@ export class StockoutDataRepository implements IStockoutDataRepository {
     async getByDateRange(fromDate: string, toDate: string): Promise<StockoutData[]> {
         try {
             this.logger.info(`Fetching stockout data from ${fromDate} to ${toDate}`);
-            
+
             const rows = await this.sqliteService.all<DatabaseStockoutData>(
                 'SELECT * FROM stockout_data WHERE input_date >= ? AND input_date <= ? ORDER BY input_date DESC, created_at DESC',
-                [fromDate, toDate]
+                [fromDate, toDate],
             );
 
             const result = rows.map((row) => this.mapDatabaseStockoutToEntity(row));
@@ -144,7 +144,7 @@ export class StockoutDataRepository implements IStockoutDataRepository {
         try {
             const result = await this.sqliteService.get<{ count: number }>(
                 'SELECT COUNT(*) as count FROM stockout_data WHERE input_date >= ? AND input_date <= ?',
-                [fromDate, toDate]
+                [fromDate, toDate],
             );
             return result?.count || 0;
         } catch (error) {

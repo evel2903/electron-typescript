@@ -160,14 +160,14 @@ export class MainProcessDIContainer {
         try {
             const sqliteService = this.getSqliteService();
             const connected = await sqliteService.connect();
-            
+
             if (!connected) {
                 console.error('Failed to connect to database');
                 return false;
             }
 
             const schemaInitialized = await sqliteService.initializeSchema();
-            
+
             if (!schemaInitialized) {
                 console.error('Failed to initialize database schema');
                 return false;

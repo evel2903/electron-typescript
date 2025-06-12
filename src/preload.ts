@@ -89,12 +89,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
         getAllLocations: () => ipcRenderer.invoke('data:getAllLocations'),
         getAllStaff: () => ipcRenderer.invoke('data:getAllStaff'),
         getAllSuppliers: () => ipcRenderer.invoke('data:getAllSuppliers'),
-        
+
         // Individual count access (maintained for backward compatibility)
         getInventoryDataCount: () => ipcRenderer.invoke('data:getInventoryDataCount'),
         getStockinDataCount: () => ipcRenderer.invoke('data:getStockinDataCount'),
         getStockoutDataCount: () => ipcRenderer.invoke('data:getStockoutDataCount'),
-        
+
         // Aggregated service operations
         getDataCounts: () => ipcRenderer.invoke('data:getDataCounts'),
         getAllMasterData: () => ipcRenderer.invoke('data:getAllMasterData'),

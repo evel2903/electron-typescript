@@ -487,18 +487,21 @@ ipcMain.handle('data:getDataCountsByDateRange', async (_, fromDate: string, toDa
     }
 });
 
-ipcMain.handle('data:getTransactionDataByDateRange', async (_, fromDate: string, toDate: string) => {
-    try {
-        return await dataService.getTransactionDataByDateRange({ fromDate, toDate });
-    } catch (error) {
-        console.error('Error getting transaction data by date range:', error);
-        return {
-            inventoryData: [],
-            stockinData: [],
-            stockoutData: [],
-        };
-    }
-});
+ipcMain.handle(
+    'data:getTransactionDataByDateRange',
+    async (_, fromDate: string, toDate: string) => {
+        try {
+            return await dataService.getTransactionDataByDateRange({ fromDate, toDate });
+        } catch (error) {
+            console.error('Error getting transaction data by date range:', error);
+            return {
+                inventoryData: [],
+                stockinData: [],
+                stockoutData: [],
+            };
+        }
+    },
+);
 
 app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') {

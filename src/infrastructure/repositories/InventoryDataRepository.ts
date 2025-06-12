@@ -119,10 +119,10 @@ export class InventoryDataRepository implements IInventoryDataRepository {
     async getByDateRange(fromDate: string, toDate: string): Promise<InventoryData[]> {
         try {
             this.logger.info(`Fetching inventory data from ${fromDate} to ${toDate}`);
-            
+
             const rows = await this.sqliteService.all<DatabaseInventoryData>(
                 'SELECT * FROM inventory_data WHERE input_date >= ? AND input_date <= ? ORDER BY input_date DESC, created_at DESC',
-                [fromDate, toDate]
+                [fromDate, toDate],
             );
 
             const result = rows.map((row) => this.mapDatabaseInventoryToEntity(row));
@@ -138,7 +138,7 @@ export class InventoryDataRepository implements IInventoryDataRepository {
         try {
             const result = await this.sqliteService.get<{ count: number }>(
                 'SELECT COUNT(*) as count FROM inventory_data WHERE input_date >= ? AND input_date <= ?',
-                [fromDate, toDate]
+                [fromDate, toDate],
             );
             return result?.count || 0;
         } catch (error) {
