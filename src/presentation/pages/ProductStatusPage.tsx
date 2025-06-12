@@ -639,7 +639,7 @@ export const ProductStatusPage: React.FC = () => {
                                                             {product.boxQuantity.toLocaleString()}
                                                         </Typography>
                                                         <Typography variant="caption" color="text.secondary" display="block">
-                                                            Alert: {product.stockOutAlert}-{product.stockInAlert}
+                                                            Alert: {product.stockInAlert}-{product.stockOutAlert}
                                                         </Typography>
                                                     </TableCell>
                                                     <TableCell align="center">
