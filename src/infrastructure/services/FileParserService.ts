@@ -1,4 +1,4 @@
-// src/infrastructure/services/FileParserService.ts - Fixed Excel parsing
+// src/infrastructure/services/FileParserService.ts - Updated detection logic for alert fields
 import * as fs from 'fs';
 import * as path from 'path';
 import { Logger } from '@/shared/utils/logger';
@@ -203,7 +203,7 @@ export class FileParserService {
 
         this.logger.debug('Detecting file type from headers:', normalizedHeaders);
 
-        // Product file detection - look for jan_code and product_name
+        // Enhanced product file detection - includes alert threshold columns
         if (
             normalizedHeaders.some(
                 (h) => h.includes('jan_code') || h.includes('jan') || h.includes('barcode'),
@@ -212,6 +212,19 @@ export class FileParserService {
                 (h) => h.includes('product_name') || h.includes('product') || h.includes('name'),
             )
         ) {
+            // Additional validation for enhanced product files with alert thresholds
+            const hasAlertFields = normalizedHeaders.some(
+                (h) =>
+                    h.includes('stock_in_alert') ||
+                    h.includes('stock_out_alert') ||
+                    h.includes('alert') ||
+                    h.includes('threshold'),
+            );
+
+            if (hasAlertFields) {
+                this.logger.info('Detected product file with alert threshold configuration');
+            }
+
             return 'product';
         }
 

@@ -195,10 +195,7 @@ export const ReportsPage: React.FC = () => {
         setToDate(formatDateForInput(today));
     };
 
-    const openDetailDialog = (
-        data: any,
-        type: 'inventory' | 'stockin' | 'stockout',
-    ) => {
+    const openDetailDialog = (data: any, type: 'inventory' | 'stockin' | 'stockout') => {
         setDetailDialog({ open: true, data, type });
     };
 
@@ -206,10 +203,7 @@ export const ReportsPage: React.FC = () => {
         setDetailDialog({ open: false, data: null, type: 'inventory' });
     };
 
-    const getFilteredData = (
-        data: any[],
-        type: 'inventory' | 'stockin' | 'stockout',
-    ) => {
+    const getFilteredData = (data: any[], type: 'inventory' | 'stockin' | 'stockout') => {
         return data.filter((item) => {
             const staffMatch =
                 !filters.staffCode ||
@@ -638,8 +632,9 @@ export const ReportsPage: React.FC = () => {
                     </Box>
 
                     <Typography variant="body1" color="text.secondary" paragraph>
-                        View and analyze inventory transactions, stock movements, and operational data. 
-                        Filter by date range and various criteria to generate detailed reports for business analysis.
+                        View and analyze inventory transactions, stock movements, and operational
+                        data. Filter by date range and various criteria to generate detailed reports
+                        for business analysis.
                     </Typography>
 
                     {/* Date Range Controls */}

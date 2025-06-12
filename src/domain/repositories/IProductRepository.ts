@@ -1,4 +1,4 @@
-// src/domain/repositories/IProductRepository.ts
+// src/domain/repositories/IProductRepository.ts - Updated with alert methods
 import { Product } from '../entities/Product';
 
 export interface IProductRepository {
@@ -7,4 +7,10 @@ export interface IProductRepository {
     ): Promise<{ inserted: number; updated: number }>;
     getAll(): Promise<Product[]>;
     getCount(): Promise<number>;
+    getProductsWithAlerts(): Promise<Product[]>;
+    updateAlertThresholds(
+        janCode: string,
+        stockInAlert: number,
+        stockOutAlert: number,
+    ): Promise<boolean>;
 }

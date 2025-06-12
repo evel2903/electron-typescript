@@ -1,4 +1,4 @@
-// src/presentation/pages/ProductStatusPage.tsx
+// src/presentation/pages/ProductStatusPage.tsx - Simplified product status display
 import React, { useState, useEffect } from 'react';
 import {
     Container,
@@ -6,7 +6,6 @@ import {
     Box,
     Card,
     CardContent,
-    TextField,
     Button,
     CircularProgress,
     Grid,
@@ -30,384 +29,230 @@ import {
     ListItem,
     ListItemText,
     Divider,
+    TextField,
+    FormControl,
+    InputLabel,
+    Select,
+    MenuItem,
 } from '@mui/material';
 import {
     Category,
     Refresh,
-    DateRange,
     FilterList,
     Visibility,
     Close,
-    TrendingUp,
-    TrendingDown,
-    Inventory,
+    Edit,
+    Warning,
+    CheckCircle,
+    Error as ErrorIcon,
 } from '@mui/icons-material';
-import { InventoryData } from '@/domain/entities/InventoryData';
-import { StockinData } from '@/domain/entities/StockinData';
-import { StockoutData } from '@/domain/entities/StockoutData';
 import { Product } from '@/domain/entities/Product';
 import { RendererDataService } from '@/application/services/DIContainer';
 
-interface ProductStatus extends Product {
-    latestInventoryDate: string;
-    totalQuantity: number;
-    totalSystemQuantity: number;
-    totalDiscrepancy: number;
-    recentStockin: number;
-    recentStockout: number;
-    averageCost: number;
-    lastPrice: number;
-    status: 'Balanced' | 'Surplus' | 'Deficit';
+type ProductStatus = 'Normal' | 'Low Stock' | 'Overstocked' | 'Critical' | 'No Alert Set';
+
+interface ProductWithStatus extends Product {
+    status: ProductStatus;
+    statusColor: 'success' | 'warning' | 'error' | 'default';
 }
 
 export const ProductStatusPage: React.FC = () => {
-    const [fromDate, setFromDate] = useState<string>('');
-    const [toDate, setToDate] = useState<string>('');
     const [loading, setLoading] = useState<boolean>(false);
     const [error, setError] = useState<string | null>(null);
-
-    // Data states
-    const [inventoryData, setInventoryData] = useState<InventoryData[]>([]);
-    const [stockinData, setStockinData] = useState<StockinData[]>([]);
-    const [stockoutData, setStockoutData] = useState<StockoutData[]>([]);
-    const [productsData, setProductsData] = useState<Product[]>([]);
+    const [products, setProducts] = useState<Product[]>([]);
+    const [filteredProducts, setFilteredProducts] = useState<ProductWithStatus[]>([]);
 
     // Pagination states
-    const [productPage, setProductPage] = useState(0);
+    const [page, setPage] = useState(0);
     const [rowsPerPage, setRowsPerPage] = useState(25);
 
     // Detail dialog state
     const [detailDialog, setDetailDialog] = useState<{
         open: boolean;
-        data: any;
-    }>({ open: false, data: null });
+        product: ProductWithStatus | null;
+    }>({ open: false, product: null });
 
     // Filter states
     const [filters, setFilters] = useState<{
         productCode: string;
-        supplierCode: string;
         productName: string;
+        supplierCode: string;
         status: string;
-    }>({ productCode: '', supplierCode: '', productName: '', status: '' });
+    }>({ productCode: '', productName: '', supplierCode: '', status: '' });
 
     const dataService = RendererDataService.getInstance();
 
     useEffect(() => {
-        // Set default date range to last 30 days
-        const today = new Date();
-        const thirtyDaysAgo = new Date(today);
-        thirtyDaysAgo.setDate(today.getDate() - 30);
-
-        setToDate(formatDateForInput(today));
-        setFromDate(formatDateForInput(thirtyDaysAgo));
+        loadProducts();
     }, []);
 
     useEffect(() => {
-        if (fromDate && toDate) {
-            loadProductStatusData();
-        }
-    }, [fromDate, toDate]);
+        applyFiltersAndCalculateStatus();
+    }, [products, filters]);
 
-    const formatDateForInput = (date: Date): string => {
-        return date.toISOString().split('T')[0];
-    };
-
-    const formatDateForAPI = (dateString: string): string => {
-        const date = new Date(dateString);
-        const year = date.getFullYear();
-        const month = date.getMonth() + 1;
-        const day = date.getDate();
-        return `${year}/${month}/${day}`;
-    };
-
-    const loadProductStatusData = async () => {
-        if (!fromDate || !toDate) return;
-
+    const loadProducts = async () => {
         setLoading(true);
         setError(null);
 
         try {
-            const apiFromDate = formatDateForAPI(fromDate);
-            const apiToDate = formatDateForAPI(toDate);
-
-            // Load all data in parallel
-            const [inventoryResult, stockinResult, stockoutResult, productsResult] =
-                await Promise.all([
-                    dataService.getInventoryDataByDateRange(apiFromDate, apiToDate),
-                    dataService.getStockinDataByDateRange(apiFromDate, apiToDate),
-                    dataService.getStockoutDataByDateRange(apiFromDate, apiToDate),
-                    dataService.getProducts(),
-                ]);
-
-            setInventoryData(inventoryResult);
-            setStockinData(stockinResult);
-            setStockoutData(stockoutResult);
-            setProductsData(productsResult);
-
-            // Reset pagination when data changes
-            setProductPage(0);
+            const productData = await dataService.getProducts();
+            setProducts(productData);
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to load product status data');
+            setError(err instanceof Error ? err.message : 'Failed to load product data');
         } finally {
             setLoading(false);
         }
     };
 
-    const handleRefresh = () => {
-        loadProductStatusData();
+    const calculateProductStatus = (
+        product: Product,
+    ): { status: ProductStatus; color: 'success' | 'warning' | 'error' | 'default' } => {
+        const { boxQuantity, stockInAlert, stockOutAlert } = product;
+
+        // If no alerts are set, return default status
+        if (stockInAlert === 0 && stockOutAlert === 0) {
+            return { status: 'No Alert Set', color: 'default' };
+        }
+
+        // Critical: Stock is at or below the critical threshold
+        if (stockOutAlert > 0 && boxQuantity <= stockOutAlert) {
+            return { status: 'Critical', color: 'error' };
+        }
+
+        // Low Stock: Stock is below normal but above critical
+        if (stockOutAlert > 0 && boxQuantity <= stockOutAlert * 1.5) {
+            return { status: 'Low Stock', color: 'warning' };
+        }
+
+        // Overstocked: Stock exceeds the maximum threshold
+        if (stockInAlert > 0 && boxQuantity >= stockInAlert) {
+            return { status: 'Overstocked', color: 'warning' };
+        }
+
+        // Normal: Stock is within acceptable range
+        return { status: 'Normal', color: 'success' };
     };
 
-    const handleQuickDateRange = (days: number) => {
-        const today = new Date();
-        const startDate = new Date(today);
-        startDate.setDate(today.getDate() - days);
+    const applyFiltersAndCalculateStatus = () => {
+        let filtered = products;
 
-        setFromDate(formatDateForInput(startDate));
-        setToDate(formatDateForInput(today));
-    };
-
-    const openDetailDialog = (data: any) => {
-        setDetailDialog({ open: true, data });
-    };
-
-    const closeDetailDialog = () => {
-        setDetailDialog({ open: false, data: null });
-    };
-
-    const getFilteredProductStatusData = (): ProductStatus[] => {
-        // Calculate product status from inventory data
-        const productStatusData: ProductStatus[] = productsData.map((product) => {
-            // Find latest inventory data for this product
-            const productInventoryData = inventoryData.filter(
-                (inv) => inv.janCode === product.janCode,
+        // Apply filters
+        if (filters.productCode) {
+            filtered = filtered.filter(
+                (product) =>
+                    product.janCode.toLowerCase().includes(filters.productCode.toLowerCase()) ||
+                    product.productName.toLowerCase().includes(filters.productCode.toLowerCase()),
             );
-            const latestInventory = productInventoryData.sort(
-                (a, b) => new Date(b.inputDate).getTime() - new Date(a.inputDate).getTime(),
-            )[0];
+        }
 
-            // Calculate total quantity from all inventory records
-            const totalQuantity = productInventoryData.reduce((sum, inv) => sum + inv.quantity, 0);
-            const totalSystemQuantity = productInventoryData.reduce(
-                (sum, inv) => sum + inv.systemQuantity,
-                0,
+        if (filters.productName) {
+            filtered = filtered.filter((product) =>
+                product.productName.toLowerCase().includes(filters.productName.toLowerCase()),
             );
-            const totalDiscrepancy = totalQuantity - totalSystemQuantity;
+        }
 
-            // Find recent stock movements
-            const recentStockin = stockinData.filter(
-                (si) => si.productCode === product.janCode,
-            ).length;
-            const recentStockout = stockoutData.filter(
-                (so) => so.productCode === product.janCode,
-            ).length;
+        if (filters.supplierCode) {
+            filtered = filtered.filter((product) =>
+                product.supplierCode.toLowerCase().includes(filters.supplierCode.toLowerCase()),
+            );
+        }
 
+        // Calculate status for each product
+        const productsWithStatus: ProductWithStatus[] = filtered.map((product) => {
+            const { status, color } = calculateProductStatus(product);
             return {
                 ...product,
-                latestInventoryDate: latestInventory?.inputDate || 'No data',
-                totalQuantity,
-                totalSystemQuantity,
-                totalDiscrepancy,
-                recentStockin,
-                recentStockout,
-                averageCost: latestInventory?.cost || 0,
-                lastPrice: latestInventory?.price || 0,
-                status:
-                    totalDiscrepancy === 0
-                        ? 'Balanced'
-                        : totalDiscrepancy > 0
-                          ? 'Surplus'
-                          : 'Deficit',
+                status,
+                statusColor: color,
             };
         });
 
-        // Apply filters
-        return productStatusData.filter((item) => {
-            const productCodeMatch =
-                !filters.productCode ||
-                item.janCode?.toLowerCase().includes(filters.productCode.toLowerCase()) ||
-                item.productName?.toLowerCase().includes(filters.productCode.toLowerCase());
+        // Apply status filter
+        if (filters.status) {
+            const statusFiltered = productsWithStatus.filter(
+                (product) => product.status === filters.status,
+            );
+            setFilteredProducts(statusFiltered);
+        } else {
+            setFilteredProducts(productsWithStatus);
+        }
 
-            const supplierMatch =
-                !filters.supplierCode ||
-                item.supplierCode?.toLowerCase().includes(filters.supplierCode.toLowerCase());
+        // Reset pagination when filters change
+        setPage(0);
+    };
 
-            const productNameMatch =
-                !filters.productName ||
-                item.productName?.toLowerCase().includes(filters.productName.toLowerCase());
+    const handleRefresh = () => {
+        loadProducts();
+    };
 
-            const statusMatch = !filters.status || item.status === filters.status;
+    const openDetailDialog = (product: ProductWithStatus) => {
+        setDetailDialog({ open: true, product });
+    };
 
-            return productCodeMatch && supplierMatch && productNameMatch && statusMatch;
+    const closeDetailDialog = () => {
+        setDetailDialog({ open: false, product: null });
+    };
+
+    const getStatusCounts = () => {
+        const counts = {
+            total: filteredProducts.length,
+            normal: 0,
+            lowStock: 0,
+            overstocked: 0,
+            critical: 0,
+            noAlert: 0,
+        };
+
+        filteredProducts.forEach((product) => {
+            switch (product.status) {
+                case 'Normal':
+                    counts.normal++;
+                    break;
+                case 'Low Stock':
+                    counts.lowStock++;
+                    break;
+                case 'Overstocked':
+                    counts.overstocked++;
+                    break;
+                case 'Critical':
+                    counts.critical++;
+                    break;
+                case 'No Alert Set':
+                    counts.noAlert++;
+                    break;
+            }
         });
+
+        return counts;
     };
 
-    const renderProductStatusTable = () => {
-        const filteredData = getFilteredProductStatusData();
-        const paginatedData = filteredData.slice(
-            productPage * rowsPerPage,
-            productPage * rowsPerPage + rowsPerPage,
-        );
-
-        return (
-            <Box>
-                <TableContainer component={Paper} elevation={1}>
-                    <Table size="small">
-                        <TableHead>
-                            <TableRow sx={{ backgroundColor: '#f5f5f5' }}>
-                                <TableCell>
-                                    <strong>Code</strong>
-                                </TableCell>
-                                <TableCell>
-                                    <strong>Product Name</strong>
-                                </TableCell>
-                                <TableCell>
-                                    <strong>Supplier</strong>
-                                </TableCell>
-                                <TableCell align="right">
-                                    <strong>Box Qty</strong>
-                                </TableCell>
-                                <TableCell align="right">
-                                    <strong>Current Stock</strong>
-                                </TableCell>
-                                <TableCell align="right">
-                                    <strong>System Stock</strong>
-                                </TableCell>
-                                <TableCell align="center">
-                                    <strong>Status</strong>
-                                </TableCell>
-                                <TableCell>
-                                    <strong>Last Inventory</strong>
-                                </TableCell>
-                                <TableCell align="right">
-                                    <strong>Recent In/Out</strong>
-                                </TableCell>
-                                <TableCell>
-                                    <strong>Actions</strong>
-                                </TableCell>
-                            </TableRow>
-                        </TableHead>
-                        <TableBody>
-                            {paginatedData.map((item, index) => (
-                                <TableRow key={index} hover>
-                                    <TableCell>{item.janCode}</TableCell>
-                                    <TableCell>{item.productName}</TableCell>
-                                    <TableCell>{item.supplierCode || 'N/A'}</TableCell>
-                                    <TableCell align="right">
-                                        {item.boxQuantity.toLocaleString()}
-                                    </TableCell>
-                                    <TableCell align="right">
-                                        {item.totalQuantity.toLocaleString()}
-                                    </TableCell>
-                                    <TableCell align="right">
-                                        {item.totalSystemQuantity.toLocaleString()}
-                                    </TableCell>
-                                    <TableCell align="center">
-                                        <Chip
-                                            label={item.status}
-                                            size="small"
-                                            color={
-                                                item.status === 'Balanced'
-                                                    ? 'success'
-                                                    : item.status === 'Surplus'
-                                                      ? 'warning'
-                                                      : 'error'
-                                            }
-                                        />
-                                    </TableCell>
-                                    <TableCell>{item.latestInventoryDate}</TableCell>
-                                    <TableCell align="right">
-                                        <Box display="flex" gap={1}>
-                                            <Chip
-                                                label={`+${item.recentStockin}`}
-                                                size="small"
-                                                color="success"
-                                                variant="outlined"
-                                            />
-                                            <Chip
-                                                label={`-${item.recentStockout}`}
-                                                size="small"
-                                                color="error"
-                                                variant="outlined"
-                                            />
-                                        </Box>
-                                    </TableCell>
-                                    <TableCell>
-                                        <IconButton
-                                            size="small"
-                                            onClick={() => openDetailDialog(item)}
-                                        >
-                                            <Visibility />
-                                        </IconButton>
-                                    </TableCell>
-                                </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
-                </TableContainer>
-                <TablePagination
-                    rowsPerPageOptions={[10, 25, 50, 100]}
-                    component="div"
-                    count={filteredData.length}
-                    rowsPerPage={rowsPerPage}
-                    page={productPage}
-                    onPageChange={(_, newPage) => setProductPage(newPage)}
-                    onRowsPerPageChange={(e) => {
-                        setRowsPerPage(parseInt(e.target.value, 10));
-                        setProductPage(0);
-                    }}
-                />
-            </Box>
-        );
-    };
+    const statusCounts = getStatusCounts();
+    const paginatedProducts = filteredProducts.slice(
+        page * rowsPerPage,
+        page * rowsPerPage + rowsPerPage,
+    );
 
     const renderDetailDialog = () => {
-        const { open, data } = detailDialog;
-        if (!open || !data) return null;
+        const { open, product } = detailDialog;
+        if (!open || !product) return null;
 
-        const getDetailFields = () => [
-            { label: 'JAN Code', value: data.janCode },
-            { label: 'Product Name', value: data.productName },
-            { label: 'Supplier Code', value: data.supplierCode || 'N/A' },
-            { label: 'Box Quantity', value: data.boxQuantity.toLocaleString() },
-            {
-                label: 'Current Stock',
-                value: data.totalQuantity?.toLocaleString() || '0',
-            },
-            {
-                label: 'System Stock',
-                value: data.totalSystemQuantity?.toLocaleString() || '0',
-            },
-            {
-                label: 'Discrepancy',
-                value: data.totalDiscrepancy?.toLocaleString() || '0',
-            },
-            { label: 'Status', value: data.status || 'Unknown' },
-            { label: 'Recent Stock In', value: data.recentStockin?.toString() || '0' },
-            {
-                label: 'Recent Stock Out',
-                value: data.recentStockout?.toString() || '0',
-            },
-            {
-                label: 'Last Inventory Date',
-                value: data.latestInventoryDate || 'No data',
-            },
-            {
-                label: 'Average Cost',
-                value: data.averageCost
-                    ? `¥${data.averageCost.toLocaleString()}`
-                    : 'N/A',
-            },
-            {
-                label: 'Last Price',
-                value: data.lastPrice ? `¥${data.lastPrice.toLocaleString()}` : 'N/A',
-            },
+        const detailFields = [
+            { label: 'JAN Code', value: product.janCode },
+            { label: 'Product Name', value: product.productName },
+            { label: 'Supplier Code', value: product.supplierCode || 'N/A' },
+            { label: 'Box Quantity', value: product.boxQuantity.toLocaleString() },
+            { label: 'Stock In Alert Threshold', value: product.stockInAlert.toLocaleString() },
+            { label: 'Stock Out Alert Threshold', value: product.stockOutAlert.toLocaleString() },
+            { label: 'Current Status', value: product.status },
+            { label: 'Created Date', value: product.createdAt.toLocaleDateString() },
+            { label: 'Last Updated', value: product.updatedAt.toLocaleDateString() },
         ];
 
         return (
             <Dialog open={open} onClose={closeDetailDialog} maxWidth="md" fullWidth>
                 <DialogTitle>
                     <Box display="flex" justifyContent="space-between" alignItems="center">
-                        Product Status Details
+                        Product Details
                         <IconButton onClick={closeDetailDialog}>
                             <Close />
                         </IconButton>
@@ -415,7 +260,7 @@ export const ProductStatusPage: React.FC = () => {
                 </DialogTitle>
                 <DialogContent>
                     <List>
-                        {getDetailFields().map((field, index) => (
+                        {detailFields.map((field, index) => (
                             <React.Fragment key={index}>
                                 <ListItem>
                                     <ListItemText
@@ -424,7 +269,7 @@ export const ProductStatusPage: React.FC = () => {
                                         primaryTypographyProps={{ fontWeight: 'medium' }}
                                     />
                                 </ListItem>
-                                {index < getDetailFields().length - 1 && <Divider />}
+                                {index < detailFields.length - 1 && <Divider />}
                             </React.Fragment>
                         ))}
                     </List>
@@ -436,18 +281,6 @@ export const ProductStatusPage: React.FC = () => {
         );
     };
 
-    const getStatusCounts = () => {
-        const filteredData = getFilteredProductStatusData();
-        return {
-            total: filteredData.length,
-            balanced: filteredData.filter(p => p.status === 'Balanced').length,
-            surplus: filteredData.filter(p => p.status === 'Surplus').length,
-            deficit: filteredData.filter(p => p.status === 'Deficit').length,
-        };
-    };
-
-    const statusCounts = getStatusCounts();
-
     return (
         <>
             <Container maxWidth="xl">
@@ -457,7 +290,7 @@ export const ProductStatusPage: React.FC = () => {
                         <Box display="flex" alignItems="center">
                             <Category sx={{ mr: 2, color: 'primary.main', fontSize: 32 }} />
                             <Typography variant="h3" component="h1">
-                                Product Status Dashboard
+                                Product Status Management
                             </Typography>
                         </Box>
 
@@ -467,145 +300,98 @@ export const ProductStatusPage: React.FC = () => {
                             onClick={handleRefresh}
                             disabled={loading}
                         >
-                            Refresh Data
+                            Refresh Products
                         </Button>
                     </Box>
 
                     <Typography variant="body1" color="text.secondary" paragraph>
-                        Monitor product inventory status, stock levels, and discrepancies across all products. 
-                        View current stock compared to system quantities and track recent stock movements.
+                        Monitor product inventory status based on configured alert thresholds. View
+                        current stock levels and manage alert configurations for optimal inventory
+                        control.
                     </Typography>
-
-                    {/* Date Range Controls */}
-                    <Card sx={{ mb: 3 }}>
-                        <CardContent>
-                            <Typography variant="h6" gutterBottom>
-                                <DateRange sx={{ mr: 1, verticalAlign: 'middle' }} />
-                                Date Range Selection
-                            </Typography>
-
-                            <Grid container spacing={2} alignItems="center">
-                                <Grid item xs={12} sm={3}>
-                                    <TextField
-                                        fullWidth
-                                        label="From Date"
-                                        type="date"
-                                        value={fromDate}
-                                        onChange={(e) => setFromDate(e.target.value)}
-                                        InputLabelProps={{ shrink: true }}
-                                        size="small"
-                                    />
-                                </Grid>
-                                <Grid item xs={12} sm={3}>
-                                    <TextField
-                                        fullWidth
-                                        label="To Date"
-                                        type="date"
-                                        value={toDate}
-                                        onChange={(e) => setToDate(e.target.value)}
-                                        InputLabelProps={{ shrink: true }}
-                                        size="small"
-                                    />
-                                </Grid>
-                                <Grid item xs={12} sm={6}>
-                                    <Box display="flex" gap={1} flexWrap="wrap">
-                                        <Button
-                                            size="small"
-                                            variant="outlined"
-                                            onClick={() => handleQuickDateRange(7)}
-                                        >
-                                            Last 7 Days
-                                        </Button>
-                                        <Button
-                                            size="small"
-                                            variant="outlined"
-                                            onClick={() => handleQuickDateRange(30)}
-                                        >
-                                            Last 30 Days
-                                        </Button>
-                                        <Button
-                                            size="small"
-                                            variant="outlined"
-                                            onClick={() => handleQuickDateRange(90)}
-                                        >
-                                            Last 90 Days
-                                        </Button>
-                                    </Box>
-                                </Grid>
-                            </Grid>
-                        </CardContent>
-                    </Card>
 
                     {/* Summary Cards */}
                     <Grid container spacing={3} sx={{ mb: 3 }}>
-                        <Grid item xs={12} sm={3}>
+                        <Grid item xs={12} sm={2}>
                             <Card sx={{ bgcolor: '#e3f2fd' }}>
                                 <CardContent>
-                                    <Box display="flex" alignItems="center">
-                                        <Category
-                                            sx={{ mr: 2, color: 'primary.main', fontSize: 40 }}
-                                        />
-                                        <Box>
-                                            <Typography variant="h4" color="primary">
-                                                {statusCounts.total.toLocaleString()}
-                                            </Typography>
-                                            <Typography variant="body2" color="text.secondary">
-                                                Total Products
-                                            </Typography>
-                                        </Box>
+                                    <Box textAlign="center">
+                                        <Typography variant="h4" color="primary">
+                                            {statusCounts.total.toLocaleString()}
+                                        </Typography>
+                                        <Typography variant="body2" color="text.secondary">
+                                            Total Products
+                                        </Typography>
                                     </Box>
                                 </CardContent>
                             </Card>
                         </Grid>
-                        <Grid item xs={12} sm={3}>
+                        <Grid item xs={12} sm={2}>
                             <Card sx={{ bgcolor: '#e8f5e8' }}>
                                 <CardContent>
-                                    <Box display="flex" alignItems="center">
-                                        <Inventory
-                                            sx={{ mr: 2, color: 'success.main', fontSize: 40 }}
-                                        />
-                                        <Box>
-                                            <Typography variant="h4" color="success.main">
-                                                {statusCounts.balanced.toLocaleString()}
-                                            </Typography>
-                                            <Typography variant="body2" color="text.secondary">
-                                                Balanced
-                                            </Typography>
-                                        </Box>
+                                    <Box textAlign="center">
+                                        <Typography variant="h4" color="success.main">
+                                            {statusCounts.normal.toLocaleString()}
+                                        </Typography>
+                                        <Typography variant="body2" color="text.secondary">
+                                            Normal
+                                        </Typography>
                                     </Box>
                                 </CardContent>
                             </Card>
                         </Grid>
-                        <Grid item xs={12} sm={3}>
+                        <Grid item xs={12} sm={2}>
                             <Card sx={{ bgcolor: '#fff3e0' }}>
                                 <CardContent>
-                                    <Box display="flex" alignItems="center">
-                                        <TrendingUp sx={{ mr: 2, color: 'warning.main', fontSize: 40 }} />
-                                        <Box>
-                                            <Typography variant="h4" color="warning.main">
-                                                {statusCounts.surplus.toLocaleString()}
-                                            </Typography>
-                                            <Typography variant="body2" color="text.secondary">
-                                                Surplus
-                                            </Typography>
-                                        </Box>
+                                    <Box textAlign="center">
+                                        <Typography variant="h4" color="warning.main">
+                                            {statusCounts.lowStock.toLocaleString()}
+                                        </Typography>
+                                        <Typography variant="body2" color="text.secondary">
+                                            Low Stock
+                                        </Typography>
                                     </Box>
                                 </CardContent>
                             </Card>
                         </Grid>
-                        <Grid item xs={12} sm={3}>
+                        <Grid item xs={12} sm={2}>
                             <Card sx={{ bgcolor: '#fce4ec' }}>
                                 <CardContent>
-                                    <Box display="flex" alignItems="center">
-                                        <TrendingDown sx={{ mr: 2, color: 'error.main', fontSize: 40 }} />
-                                        <Box>
-                                            <Typography variant="h4" color="error.main">
-                                                {statusCounts.deficit.toLocaleString()}
-                                            </Typography>
-                                            <Typography variant="body2" color="text.secondary">
-                                                Deficit
-                                            </Typography>
-                                        </Box>
+                                    <Box textAlign="center">
+                                        <Typography variant="h4" color="error.main">
+                                            {statusCounts.critical.toLocaleString()}
+                                        </Typography>
+                                        <Typography variant="body2" color="text.secondary">
+                                            Critical
+                                        </Typography>
+                                    </Box>
+                                </CardContent>
+                            </Card>
+                        </Grid>
+                        <Grid item xs={12} sm={2}>
+                            <Card sx={{ bgcolor: '#fff3e0' }}>
+                                <CardContent>
+                                    <Box textAlign="center">
+                                        <Typography variant="h4" color="warning.main">
+                                            {statusCounts.overstocked.toLocaleString()}
+                                        </Typography>
+                                        <Typography variant="body2" color="text.secondary">
+                                            Overstocked
+                                        </Typography>
+                                    </Box>
+                                </CardContent>
+                            </Card>
+                        </Grid>
+                        <Grid item xs={12} sm={2}>
+                            <Card sx={{ bgcolor: '#f5f5f5' }}>
+                                <CardContent>
+                                    <Box textAlign="center">
+                                        <Typography variant="h4" color="text.secondary">
+                                            {statusCounts.noAlert.toLocaleString()}
+                                        </Typography>
+                                        <Typography variant="body2" color="text.secondary">
+                                            No Alert Set
+                                        </Typography>
                                     </Box>
                                 </CardContent>
                             </Card>
@@ -617,7 +403,7 @@ export const ProductStatusPage: React.FC = () => {
                         <CardContent>
                             <Typography variant="h6" gutterBottom>
                                 <FilterList sx={{ mr: 1, verticalAlign: 'middle' }} />
-                                Filters
+                                Filter Products
                             </Typography>
 
                             <Grid container spacing={2}>
@@ -630,19 +416,7 @@ export const ProductStatusPage: React.FC = () => {
                                             setFilters({ ...filters, productCode: e.target.value })
                                         }
                                         size="small"
-                                        placeholder="Filter by product or JAN code"
-                                    />
-                                </Grid>
-                                <Grid item xs={12} sm={3}>
-                                    <TextField
-                                        fullWidth
-                                        label="Supplier Code"
-                                        value={filters.supplierCode}
-                                        onChange={(e) =>
-                                            setFilters({ ...filters, supplierCode: e.target.value })
-                                        }
-                                        size="small"
-                                        placeholder="Filter by supplier code"
+                                        placeholder="Filter by product code or name"
                                     />
                                 </Grid>
                                 <Grid item xs={12} sm={3}>
@@ -660,20 +434,33 @@ export const ProductStatusPage: React.FC = () => {
                                 <Grid item xs={12} sm={3}>
                                     <TextField
                                         fullWidth
-                                        select
-                                        label="Status"
-                                        value={filters.status}
+                                        label="Supplier Code"
+                                        value={filters.supplierCode}
                                         onChange={(e) =>
-                                            setFilters({ ...filters, status: e.target.value })
+                                            setFilters({ ...filters, supplierCode: e.target.value })
                                         }
                                         size="small"
-                                        SelectProps={{ native: true }}
-                                    >
-                                        <option value="">All Status</option>
-                                        <option value="Balanced">Balanced</option>
-                                        <option value="Surplus">Surplus</option>
-                                        <option value="Deficit">Deficit</option>
-                                    </TextField>
+                                        placeholder="Filter by supplier code"
+                                    />
+                                </Grid>
+                                <Grid item xs={12} sm={3}>
+                                    <FormControl fullWidth size="small">
+                                        <InputLabel>Status</InputLabel>
+                                        <Select
+                                            value={filters.status}
+                                            onChange={(e) =>
+                                                setFilters({ ...filters, status: e.target.value })
+                                            }
+                                            label="Status"
+                                        >
+                                            <MenuItem value="">All Status</MenuItem>
+                                            <MenuItem value="Normal">Normal</MenuItem>
+                                            <MenuItem value="Low Stock">Low Stock</MenuItem>
+                                            <MenuItem value="Critical">Critical</MenuItem>
+                                            <MenuItem value="Overstocked">Overstocked</MenuItem>
+                                            <MenuItem value="No Alert Set">No Alert Set</MenuItem>
+                                        </Select>
+                                    </FormControl>
                                 </Grid>
                             </Grid>
                         </CardContent>
@@ -693,15 +480,120 @@ export const ProductStatusPage: React.FC = () => {
                         </Box>
                     )}
 
-                    {/* Product Status Table */}
+                    {/* Product Table */}
                     {!loading && (
                         <Card>
                             <CardContent>
                                 <Typography variant="h6" gutterBottom>
-                                    Product Status Overview ({getFilteredProductStatusData().length} products)
+                                    Product Status Overview ({filteredProducts.length} products)
                                 </Typography>
                                 <Divider sx={{ mb: 2 }} />
-                                {renderProductStatusTable()}
+
+                                <TableContainer component={Paper} elevation={1}>
+                                    <Table size="small">
+                                        <TableHead>
+                                            <TableRow sx={{ backgroundColor: '#f5f5f5' }}>
+                                                <TableCell>
+                                                    <strong>Code</strong>
+                                                </TableCell>
+                                                <TableCell>
+                                                    <strong>Product Name</strong>
+                                                </TableCell>
+                                                <TableCell align="right">
+                                                    <strong>Box Qty</strong>
+                                                </TableCell>
+                                                <TableCell align="center">
+                                                    <strong>Status</strong>
+                                                </TableCell>
+                                                <TableCell align="center">
+                                                    <strong>Actions</strong>
+                                                </TableCell>
+                                            </TableRow>
+                                        </TableHead>
+                                        <TableBody>
+                                            {paginatedProducts.map((product, index) => (
+                                                <TableRow key={index} hover>
+                                                    <TableCell>
+                                                        <Typography
+                                                            variant="body2"
+                                                            fontWeight="medium"
+                                                        >
+                                                            {product.janCode}
+                                                        </Typography>
+                                                        <Typography
+                                                            variant="caption"
+                                                            color="text.secondary"
+                                                        >
+                                                            {product.supplierCode || 'No Supplier'}
+                                                        </Typography>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <Typography variant="body2">
+                                                            {product.productName}
+                                                        </Typography>
+                                                    </TableCell>
+                                                    <TableCell align="right">
+                                                        <Typography
+                                                            variant="body2"
+                                                            fontWeight="medium"
+                                                        >
+                                                            {product.boxQuantity.toLocaleString()}
+                                                        </Typography>
+                                                        <Typography
+                                                            variant="caption"
+                                                            color="text.secondary"
+                                                            display="block"
+                                                        >
+                                                            Alert: {product.stockInAlert}-
+                                                            {product.stockOutAlert}
+                                                        </Typography>
+                                                    </TableCell>
+                                                    <TableCell align="center">
+                                                        <Chip
+                                                            label={product.status}
+                                                            size="small"
+                                                            color={product.statusColor}
+                                                            icon={
+                                                                product.status === 'Critical' ? (
+                                                                    <ErrorIcon />
+                                                                ) : product.status === 'Normal' ? (
+                                                                    <CheckCircle />
+                                                                ) : (
+                                                                    <Warning />
+                                                                )
+                                                            }
+                                                        />
+                                                    </TableCell>
+                                                    <TableCell align="center">
+                                                        <Tooltip title="View Details">
+                                                            <IconButton
+                                                                size="small"
+                                                                onClick={() =>
+                                                                    openDetailDialog(product)
+                                                                }
+                                                            >
+                                                                <Visibility />
+                                                            </IconButton>
+                                                        </Tooltip>
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))}
+                                        </TableBody>
+                                    </Table>
+                                </TableContainer>
+
+                                <TablePagination
+                                    rowsPerPageOptions={[10, 25, 50, 100]}
+                                    component="div"
+                                    count={filteredProducts.length}
+                                    rowsPerPage={rowsPerPage}
+                                    page={page}
+                                    onPageChange={(_, newPage) => setPage(newPage)}
+                                    onRowsPerPageChange={(e) => {
+                                        setRowsPerPage(parseInt(e.target.value, 10));
+                                        setPage(0);
+                                    }}
+                                />
                             </CardContent>
                         </Card>
                     )}

@@ -6,10 +6,8 @@ import { ImportPage } from './ImportPage';
 import { GetDataPage } from './GetDataPage';
 import { ReportsPage } from './ReportsPage';
 import { ProductStatusPage } from './ProductStatusPage';
-import { Tab2Page } from './Tab2Page';
 import { SettingsPage } from './SettingsPage';
 import { DIContainer } from '@/application/services/DIContainer';
-import { ElectronAPIService } from '@/infrastructure/services/ElectronAPIService';
 import { AndroidDevice } from '@/domain/entities/AndroidDevice';
 
 export const HomePage: React.FC = () => {
@@ -41,19 +39,17 @@ export const HomePage: React.FC = () => {
     const renderCurrentPage = () => {
         switch (currentTab) {
             case 0:
-                return <ImportPage connectedDevice={selectedDevice} />;
-            case 1:
-                return <GetDataPage connectedDevice={selectedDevice} />;
-            case 2:
-                return <ReportsPage />;
-            case 3:
                 return <ProductStatusPage />;
+            case 1:
+                return <ReportsPage />;
+            case 2:
+                return <GetDataPage connectedDevice={selectedDevice} />;
+            case 3:
+                return <ImportPage connectedDevice={selectedDevice} />;
             case 4:
-                return <Tab2Page />;
-            case 5:
                 return <SettingsPage />;
             default:
-                return <ImportPage connectedDevice={selectedDevice} />;
+                return <ProductStatusPage />;
         }
     };
 

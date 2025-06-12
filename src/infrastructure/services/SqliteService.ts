@@ -1,4 +1,4 @@
-// src/infrastructure/services/SqliteService.ts - Updated with new tables
+// src/infrastructure/services/SqliteService.ts - Updated with product alert fields
 import Database from 'better-sqlite3';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -108,6 +108,9 @@ export class SqliteService {
 
     async initializeSchema(): Promise<boolean> {
         try {
+            // Check database version for migrations
+            await this.runMigrations();
+
             // Settings table (existing)
             await this.run(`
         CREATE TABLE IF NOT EXISTS sys_setting (
@@ -127,13 +130,15 @@ export class SqliteService {
         END
       `);
 
-            // Product table (existing)
+            // Product table (updated with alert fields)
             await this.run(`
         CREATE TABLE IF NOT EXISTS product (
           jan_code TEXT PRIMARY KEY,
           product_name TEXT NOT NULL,
           box_quantity INTEGER DEFAULT 0,
           supplier_code TEXT,
+          stock_in_alert INTEGER DEFAULT 0,
+          stock_out_alert INTEGER DEFAULT 0,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
           updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
@@ -355,11 +360,66 @@ export class SqliteService {
                 `CREATE INDEX IF NOT EXISTS idx_stockout_dept ON stockout_data(dept_code)`,
             );
 
-            this.logger.info('Database schema initialized successfully with new tables');
+            this.logger.info('Database schema initialized successfully with product alert fields');
             return true;
         } catch (error) {
             this.logger.error('Failed to initialize database schema:', error as Error);
             return false;
+        }
+    }
+
+    private async runMigrations(): Promise<void> {
+        try {
+            // Create migrations table if it doesn't exist
+            await this.run(`
+                CREATE TABLE IF NOT EXISTS migrations (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    migration_name TEXT UNIQUE NOT NULL,
+                    applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            `);
+
+            // Migration 1: Add alert fields to product table
+            const migrationName = 'add_product_alert_fields';
+            const existingMigration = await this.get(
+                'SELECT migration_name FROM migrations WHERE migration_name = ?',
+                [migrationName],
+            );
+
+            if (!existingMigration) {
+                // Check if product table exists and if alert fields are missing
+                const tableInfo = await this.all(`PRAGMA table_info(product)`);
+                const hasStockInAlert = tableInfo.some((col: any) => col.name === 'stock_in_alert');
+                const hasStockOutAlert = tableInfo.some(
+                    (col: any) => col.name === 'stock_out_alert',
+                );
+
+                if (!hasStockInAlert || !hasStockOutAlert) {
+                    this.logger.info('Running migration: add_product_alert_fields');
+
+                    if (!hasStockInAlert) {
+                        await this.run(
+                            `ALTER TABLE product ADD COLUMN stock_in_alert INTEGER DEFAULT 0`,
+                        );
+                    }
+
+                    if (!hasStockOutAlert) {
+                        await this.run(
+                            `ALTER TABLE product ADD COLUMN stock_out_alert INTEGER DEFAULT 0`,
+                        );
+                    }
+
+                    // Record the migration
+                    await this.run('INSERT INTO migrations (migration_name) VALUES (?)', [
+                        migrationName,
+                    ]);
+
+                    this.logger.info('Migration completed: add_product_alert_fields');
+                }
+            }
+        } catch (error) {
+            this.logger.error('Migration failed:', error as Error);
+            throw error;
         }
     }
 
