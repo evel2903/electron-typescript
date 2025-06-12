@@ -313,7 +313,7 @@ export const SettingsPage: React.FC = () => {
             {/* Error Snackbar */}
             <Snackbar
                 open={!!error}
-                autoHideDuration={6000}
+                autoHideDuration={2000}
                 onClose={handleCloseError}
                 anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
             >

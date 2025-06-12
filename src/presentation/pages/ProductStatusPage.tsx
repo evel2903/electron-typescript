@@ -694,7 +694,7 @@ export const ProductStatusPage: React.FC = () => {
             {/* Success Snackbar */}
             <Snackbar
                 open={!!success}
-                autoHideDuration={4000}
+                autoHideDuration={2000}
                 onClose={handleCloseSuccess}
                 anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
             >
@@ -706,7 +706,7 @@ export const ProductStatusPage: React.FC = () => {
             {/* Error Snackbar */}
             <Snackbar
                 open={!!error}
-                autoHideDuration={6000}
+                autoHideDuration={2000}
                 onClose={handleCloseError}
                 anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
             >

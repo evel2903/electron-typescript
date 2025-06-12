@@ -1,4 +1,4 @@
-// src/presentation/pages/ReportsPage.tsx - Updated without Product Status tab
+// src/presentation/pages/ReportsPage.tsx - Enhanced with Excel export functionality
 import React, { useState, useEffect } from 'react';
 import {
     Container,
@@ -36,6 +36,7 @@ import {
     InputLabel,
     Select,
     MenuItem,
+    Snackbar,
 } from '@mui/material';
 import {
     Assessment,
@@ -82,6 +83,7 @@ export const ReportsPage: React.FC = () => {
     const [toDate, setToDate] = useState<string>('');
     const [loading, setLoading] = useState<boolean>(false);
     const [error, setError] = useState<string | null>(null);
+    const [success, setSuccess] = useState<string | null>(null);
 
     // Data states
     const [inventoryData, setInventoryData] = useState<InventoryData[]>([]);
@@ -193,6 +195,166 @@ export const ReportsPage: React.FC = () => {
 
         setFromDate(formatDateForInput(startDate));
         setToDate(formatDateForInput(today));
+    };
+
+    const handleDownloadExcel = () => {
+        try {
+            const XLSX = require('xlsx');
+            
+            // Get filtered data and tab info for current tab only
+            let filteredData: any[] = [];
+            let tabName = '';
+            let dataType: 'inventory' | 'stockin' | 'stockout' = 'inventory';
+            
+            switch (currentTab) {
+                case 0:
+                    filteredData = getFilteredData(inventoryData, 'inventory');
+                    tabName = 'Inventory';
+                    dataType = 'inventory';
+                    break;
+                case 1:
+                    filteredData = getFilteredData(stockinData, 'stockin');
+                    tabName = 'Stock_In';
+                    dataType = 'stockin';
+                    break;
+                case 2:
+                    filteredData = getFilteredData(stockoutData, 'stockout');
+                    tabName = 'Stock_Out';
+                    dataType = 'stockout';
+                    break;
+                default:
+                    filteredData = getFilteredData(inventoryData, 'inventory');
+                    tabName = 'Inventory';
+                    dataType = 'inventory';
+            }
+
+            // Prepare summary data for Excel export
+            const summaryData = [
+                [`${tabName} Report Export`],
+                ['Generated Date:', new Date().toLocaleString()],
+                ['Date Range:', `${fromDate} to ${toDate}`],
+                ['Report Type:', tabName.replace('_', ' ')],
+                ['Total Records:', filteredData.length.toString()],
+                [], // Empty row for spacing
+                ['Filters Applied:'],
+                ['Staff Code Filter:', filters.staffCode || 'None'],
+                ['Shop Code Filter:', filters.shopCode || 'None'],
+                ['Product Code Filter:', filters.productCode || 'None'],
+                [], // Empty row for spacing
+                ['Data Details:'],
+            ];
+
+            // Create workbook
+            const workbook = XLSX.utils.book_new();
+
+            // Summary sheet
+            const summaryWorksheet = XLSX.utils.aoa_to_sheet(summaryData);
+            XLSX.utils.book_append_sheet(workbook, summaryWorksheet, 'Summary');
+
+            // Data sheet based on current tab
+            if (filteredData.length > 0) {
+                let sheetData: any[] = [];
+                let columnWidths: any[] = [];
+
+                if (dataType === 'inventory') {
+                    sheetData = filteredData.map((item, index) => ({
+                        'No.': index + 1,
+                        'Input Date': item.inputDate,
+                        'Staff Code': item.staffCode,
+                        'Shop Code': item.shopCode,
+                        'Shelf Number': item.shelfNumber,
+                        'Shelf Position': item.shelfPosition,
+                        'JAN Code': item.janCode || 'N/A',
+                        'Quantity': item.quantity,
+                        'System Quantity': item.systemQuantity,
+                        'Quantity Discrepancy': item.quantityDiscrepancy,
+                        'Cost': item.cost,
+                        'Price': item.price,
+                        'Note': item.note || 'N/A',
+                        'Update Date': item.updateDate || 'N/A',
+                        'Update Time': item.updateTime || 'N/A',
+                    }));
+
+                    columnWidths = [
+                        { wch: 5 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 },
+                        { wch: 12 }, { wch: 15 }, { wch: 10 }, { wch: 12 }, { wch: 15 },
+                        { wch: 10 }, { wch: 10 }, { wch: 25 }, { wch: 12 }, { wch: 12 },
+                    ];
+                } else if (dataType === 'stockin') {
+                    sheetData = filteredData.map((item, index) => ({
+                        'No.': index + 1,
+                        'Input Date': item.inputDate,
+                        'Slip Number': item.slipNumber,
+                        'Supplier Code': item.supplierCode || 'N/A',
+                        'Supplier Name': item.supplierName || 'N/A',
+                        'Location': item.location,
+                        'Shelf Number': item.shelfNo,
+                        'Shelf Position': item.shelfPosition,
+                        'Product Code': item.productCode,
+                        'Quantity': item.quantity,
+                        'Staff Code': item.staffCode,
+                        'Shop Code': item.shopCode,
+                        'Note': item.note || 'N/A',
+                        'Ignore Trigger': item.ignoreTrigger ? 'Yes' : 'No',
+                    }));
+
+                    columnWidths = [
+                        { wch: 5 }, { wch: 12 }, { wch: 15 }, { wch: 15 }, { wch: 25 },
+                        { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 15 }, { wch: 10 },
+                        { wch: 12 }, { wch: 12 }, { wch: 25 }, { wch: 12 },
+                    ];
+                } else if (dataType === 'stockout') {
+                    sheetData = filteredData.map((item, index) => ({
+                        'No.': index + 1,
+                        'Input Date': item.inputDate,
+                        'Slip Number': item.slipNumber,
+                        'Supplier Code': item.supplierCode,
+                        'Department Code': item.deptCode,
+                        'Department Name': item.deptName,
+                        'Location': item.location,
+                        'Shelf Number': item.shelfNo,
+                        'Shelf Position': item.shelfPosition,
+                        'Product Code': item.productCode,
+                        'Quantity': item.quantity,
+                        'Staff Code': item.staffCode,
+                        'Shop Code': item.shopCode,
+                        'Note': item.note || 'N/A',
+                        'Ignore Trigger': item.ignoreTrigger ? 'Yes' : 'No',
+                    }));
+
+                    columnWidths = [
+                        { wch: 5 }, { wch: 12 }, { wch: 15 }, { wch: 15 }, { wch: 15 },
+                        { wch: 20 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 15 },
+                        { wch: 10 }, { wch: 12 }, { wch: 12 }, { wch: 25 }, { wch: 12 },
+                    ];
+                }
+
+                const dataWorksheet = XLSX.utils.json_to_sheet(sheetData);
+                dataWorksheet['!cols'] = columnWidths;
+                XLSX.utils.book_append_sheet(workbook, dataWorksheet, `${tabName} Data`);
+            }
+
+            // Generate filename with current date and time
+            const now = new Date();
+            const timestamp = now.toISOString().slice(0, 19).replace(/:/g, '-');
+            const filename = `${tabName}_Report_${timestamp}.xlsx`;
+
+            // Save the file
+            XLSX.writeFile(workbook, filename);
+
+            setSuccess(`Excel file exported successfully: ${filename} (${filteredData.length} ${tabName.replace('_', ' ').toLowerCase()} records included)`);
+        } catch (error) {
+            console.error('Failed to export Excel file:', error);
+            setError('Failed to export Excel file. Please verify system permissions and try again.');
+        }
+    };
+
+    const handleCloseError = () => {
+        setError(null);
+    };
+
+    const handleCloseSuccess = () => {
+        setSuccess(null);
     };
 
     const openDetailDialog = (data: any, type: 'inventory' | 'stockin' | 'stockout') => {
@@ -608,6 +770,20 @@ export const ReportsPage: React.FC = () => {
         );
     };
 
+    // Calculate filtered records for current tab only
+    const getCurrentTabFilteredRecords = () => {
+        switch (currentTab) {
+            case 0:
+                return getFilteredData(inventoryData, 'inventory').length;
+            case 1:
+                return getFilteredData(stockinData, 'stockin').length;
+            case 2:
+                return getFilteredData(stockoutData, 'stockout').length;
+            default:
+                return 0;
+        }
+    };
+
     return (
         <>
             <Container maxWidth="xl">
@@ -621,14 +797,28 @@ export const ReportsPage: React.FC = () => {
                             </Typography>
                         </Box>
 
-                        <Button
-                            variant="outlined"
-                            startIcon={<Refresh />}
-                            onClick={handleRefresh}
-                            disabled={loading}
-                        >
-                            Refresh Data
-                        </Button>
+                        <Box display="flex" gap={2}>
+                            <Tooltip title={`Export ${currentTab === 0 ? 'Inventory' : currentTab === 1 ? 'Stock In' : 'Stock Out'} data to Excel`}>
+                                <span>
+                                    <Button
+                                        variant="outlined"
+                                        startIcon={<GetApp />}
+                                        onClick={handleDownloadExcel}
+                                        disabled={loading || getCurrentTabFilteredRecords() === 0}
+                                    >
+                                        Export Current Tab
+                                    </Button>
+                                </span>
+                            </Tooltip>
+                            <Button
+                                variant="outlined"
+                                startIcon={<Refresh />}
+                                onClick={handleRefresh}
+                                disabled={loading}
+                            >
+                                Refresh Data
+                            </Button>
+                        </Box>
                     </Box>
 
                     <Typography variant="body1" color="text.secondary" paragraph>
@@ -860,6 +1050,30 @@ export const ReportsPage: React.FC = () => {
 
             {/* Detail Dialog */}
             {renderDetailDialog()}
+
+            {/* Success Snackbar */}
+            <Snackbar
+                open={!!success}
+                autoHideDuration={2000}
+                onClose={handleCloseSuccess}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+            >
+                <Alert onClose={handleCloseSuccess} severity="success" sx={{ width: '100%' }}>
+                    {success}
+                </Alert>
+            </Snackbar>
+
+            {/* Error Snackbar */}
+            <Snackbar
+                open={!!error}
+                autoHideDuration={2000}
+                onClose={handleCloseError}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+            >
+                <Alert onClose={handleCloseError} severity="error" sx={{ width: '100%' }}>
+                    {error}
+                </Alert>
+            </Snackbar>
         </>
     );
 };
