@@ -19,9 +19,6 @@ import {
     ListItem,
     ListItemText,
     ListItemIcon,
-    Accordion,
-    AccordionSummary,
-    AccordionDetails,
     Divider,
     Chip,
     Grid,
@@ -38,7 +35,6 @@ import {
     Storage,
     CheckCircle,
     Error as ErrorIcon,
-    Warning,
     ExpandMore,
     Inventory,
     TrendingUp,
@@ -46,7 +42,6 @@ import {
     Refresh,
     PhoneAndroid,
     Category,
-    Assessment,
 } from '@mui/icons-material';
 import { AndroidDevice } from '@/domain/entities/AndroidDevice';
 import { DIContainer, RendererDataService } from '@/application/services/DIContainer';
@@ -70,16 +65,6 @@ interface SyncProgress {
     overallProgress: number;
 }
 
-interface DataCounts {
-    inventory: number;
-    stockin: number;
-    stockout: number;
-    products: number;
-    locations: number;
-    staff: number;
-    suppliers: number;
-}
-
 interface GetDataPageProps {
     connectedDevice?: AndroidDevice | null;
 }
@@ -93,23 +78,13 @@ export const GetDataPage: React.FC<GetDataPageProps> = ({ connectedDevice }) => 
     const [importPath, setImportPath] = useState<string>('');
     const [databasePath, setDatabasePath] = useState<string>('');
     const [confirmDialogOpen, setConfirmDialogOpen] = useState<boolean>(false);
-    const [dataCounts, setDataCounts] = useState<DataCounts | null>(null);
-    const [loadingCounts, setLoadingCounts] = useState<boolean>(false);
 
     const settingService = DIContainer.getInstance().getSettingService();
     const dataService = RendererDataService.getInstance();
 
     useEffect(() => {
         loadImportPath();
-        loadDataCounts();
     }, []);
-
-    useEffect(() => {
-        // Refresh data counts after successful sync
-        if (syncResults.length > 0 && syncResults.some(result => result.success)) {
-            loadDataCounts();
-        }
-    }, [syncResults]);
 
     const loadImportPath = async () => {
         try {
@@ -121,27 +96,6 @@ export const GetDataPage: React.FC<GetDataPageProps> = ({ connectedDevice }) => 
             console.error('Failed to load import path:', error);
             setImportPath('/sdcard/Downloads');
             setDatabasePath('/sdcard/Downloads/Database/kss_android.db');
-        }
-    };
-
-    const loadDataCounts = async () => {
-        setLoadingCounts(true);
-        try {
-            const counts = await dataService.getDataCounts();
-            setDataCounts(counts);
-        } catch (error) {
-            console.error('Failed to load data counts:', error);
-            setDataCounts({
-                inventory: 0,
-                stockin: 0,
-                stockout: 0,
-                products: 0,
-                locations: 0,
-                staff: 0,
-                suppliers: 0,
-            });
-        } finally {
-            setLoadingCounts(false);
         }
     };
 
@@ -200,9 +154,6 @@ export const GetDataPage: React.FC<GetDataPageProps> = ({ connectedDevice }) => 
                     `Synchronization completed with ${failedTables.length} table(s) having errors. ${totalRecordsInserted} records inserted, ${totalRecordsUpdated} records updated.`,
                 );
             }
-
-            // Refresh data counts after successful sync
-            await loadDataCounts();
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Failed to synchronize data from device');
         } finally {
@@ -223,10 +174,6 @@ export const GetDataPage: React.FC<GetDataPageProps> = ({ connectedDevice }) => 
 
     const handleCloseSuccess = () => {
         setSuccess(null);
-    };
-
-    const handleRefreshCounts = async () => {
-        await loadDataCounts();
     };
 
     const getSyncResultIcon = (result: SyncResult) => {
@@ -294,110 +241,6 @@ export const GetDataPage: React.FC<GetDataPageProps> = ({ connectedDevice }) => 
                         This will retrieve all inventory, stock movement, and product master records
                         from the device and merge them with your local data.
                     </Typography>
-
-                    {/* Current Data Overview */}
-                    <Card sx={{ mb: 3 }}>
-                        <CardContent>
-                            <Box display="flex" alignItems="center" justifyContent="between" mb={2}>
-                                <Box display="flex" alignItems="center" gap={2}>
-                                    <Assessment sx={{ color: 'primary.main' }} />
-                                    <Typography variant="h6">Current Data Overview</Typography>
-                                </Box>
-                                <Button
-                                    variant="outlined"
-                                    size="small"
-                                    startIcon={loadingCounts ? <CircularProgress size={16} /> : <Refresh />}
-                                    onClick={handleRefreshCounts}
-                                    disabled={loadingCounts || syncing}
-                                >
-                                    Refresh
-                                </Button>
-                            </Box>
-
-                            {loadingCounts ? (
-                                <Box display="flex" justifyContent="center" py={2}>
-                                    <CircularProgress size={24} />
-                                </Box>
-                            ) : dataCounts ? (
-                                <Grid container spacing={2}>
-                                    <Grid item xs={6} md={3}>
-                                        <Box textAlign="center" p={2} border={1} borderColor="divider" borderRadius={1}>
-                                            <Typography variant="h4" color="primary">
-                                                {dataCounts.products.toLocaleString()}
-                                            </Typography>
-                                            <Typography variant="body2" color="text.secondary">
-                                                Products
-                                            </Typography>
-                                        </Box>
-                                    </Grid>
-                                    <Grid item xs={6} md={3}>
-                                        <Box textAlign="center" p={2} border={1} borderColor="divider" borderRadius={1}>
-                                            <Typography variant="h4" color="primary">
-                                                {dataCounts.locations.toLocaleString()}
-                                            </Typography>
-                                            <Typography variant="body2" color="text.secondary">
-                                                Locations
-                                            </Typography>
-                                        </Box>
-                                    </Grid>
-                                    <Grid item xs={6} md={3}>
-                                        <Box textAlign="center" p={2} border={1} borderColor="divider" borderRadius={1}>
-                                            <Typography variant="h4" color="primary">
-                                                {dataCounts.staff.toLocaleString()}
-                                            </Typography>
-                                            <Typography variant="body2" color="text.secondary">
-                                                Staff
-                                            </Typography>
-                                        </Box>
-                                    </Grid>
-                                    <Grid item xs={6} md={3}>
-                                        <Box textAlign="center" p={2} border={1} borderColor="divider" borderRadius={1}>
-                                            <Typography variant="h4" color="primary">
-                                                {dataCounts.suppliers.toLocaleString()}
-                                            </Typography>
-                                            <Typography variant="body2" color="text.secondary">
-                                                Suppliers
-                                            </Typography>
-                                        </Box>
-                                    </Grid>
-                                    <Grid item xs={4} md={4}>
-                                        <Box textAlign="center" p={2} border={1} borderColor="info.main" borderRadius={1}>
-                                            <Typography variant="h4" color="info.main">
-                                                {dataCounts.inventory.toLocaleString()}
-                                            </Typography>
-                                            <Typography variant="body2" color="text.secondary">
-                                                Inventory Records
-                                            </Typography>
-                                        </Box>
-                                    </Grid>
-                                    <Grid item xs={4} md={4}>
-                                        <Box textAlign="center" p={2} border={1} borderColor="success.main" borderRadius={1}>
-                                            <Typography variant="h4" color="success.main">
-                                                {dataCounts.stockin.toLocaleString()}
-                                            </Typography>
-                                            <Typography variant="body2" color="text.secondary">
-                                                Stock In Records
-                                            </Typography>
-                                        </Box>
-                                    </Grid>
-                                    <Grid item xs={4} md={4}>
-                                        <Box textAlign="center" p={2} border={1} borderColor="error.main" borderRadius={1}>
-                                            <Typography variant="h4" color="error.main">
-                                                {dataCounts.stockout.toLocaleString()}
-                                            </Typography>
-                                            <Typography variant="body2" color="text.secondary">
-                                                Stock Out Records
-                                            </Typography>
-                                        </Box>
-                                    </Grid>
-                                </Grid>
-                            ) : (
-                                <Typography variant="body2" color="text.secondary">
-                                    Unable to load data counts
-                                </Typography>
-                            )}
-                        </CardContent>
-                    </Card>
 
                     {/* Sync Progress */}
                     {syncProgress && (
