@@ -3,6 +3,9 @@ import { Product } from '@/domain/entities/Product';
 import { Location } from '@/domain/entities/Location';
 import { Staff } from '@/domain/entities/Staff';
 import { Supplier } from '@/domain/entities/Supplier';
+import { InventoryData } from '@/domain/entities/InventoryData';
+import { StockinData } from '@/domain/entities/StockinData';
+import { StockoutData } from '@/domain/entities/StockoutData';
 import { IProductRepository } from '@/domain/repositories/IProductRepository';
 import { ILocationRepository } from '@/domain/repositories/ILocationRepository';
 import { IStaffRepository } from '@/domain/repositories/IStaffRepository';
@@ -26,6 +29,23 @@ export interface AllData {
     locations: Location[];
     staff: Staff[];
     suppliers: Supplier[];
+}
+
+export interface DateRangeFilter {
+    fromDate: string; // Format: YYYY/MM/DD
+    toDate: string;   // Format: YYYY/MM/DD
+}
+
+export interface FilteredDataCounts {
+    inventory: number;
+    stockin: number;
+    stockout: number;
+}
+
+export interface FilteredTransactionData {
+    inventoryData: InventoryData[];
+    stockinData: StockinData[];
+    stockoutData: StockoutData[];
 }
 
 export class DataService {
@@ -72,6 +92,79 @@ export class DataService {
                 staff: 0,
                 suppliers: 0,
             };
+        }
+    }
+
+    async getDataCountsByDateRange(dateRange: DateRangeFilter): Promise<FilteredDataCounts> {
+        try {
+            const [inventory, stockin, stockout] = await Promise.all([
+                this.inventoryRepository.getCountByDateRange(dateRange.fromDate, dateRange.toDate),
+                this.stockinRepository.getCountByDateRange(dateRange.fromDate, dateRange.toDate),
+                this.stockoutRepository.getCountByDateRange(dateRange.fromDate, dateRange.toDate),
+            ]);
+
+            return {
+                inventory,
+                stockin,
+                stockout,
+            };
+        } catch (error) {
+            console.error('Error getting data counts by date range:', error);
+            return {
+                inventory: 0,
+                stockin: 0,
+                stockout: 0,
+            };
+        }
+    }
+
+    async getTransactionDataByDateRange(dateRange: DateRangeFilter): Promise<FilteredTransactionData> {
+        try {
+            const [inventoryData, stockinData, stockoutData] = await Promise.all([
+                this.inventoryRepository.getByDateRange(dateRange.fromDate, dateRange.toDate),
+                this.stockinRepository.getByDateRange(dateRange.fromDate, dateRange.toDate),
+                this.stockoutRepository.getByDateRange(dateRange.fromDate, dateRange.toDate),
+            ]);
+
+            return {
+                inventoryData,
+                stockinData,
+                stockoutData,
+            };
+        } catch (error) {
+            console.error('Error getting transaction data by date range:', error);
+            return {
+                inventoryData: [],
+                stockinData: [],
+                stockoutData: [],
+            };
+        }
+    }
+
+    async getInventoryDataByDateRange(fromDate: string, toDate: string): Promise<InventoryData[]> {
+        try {
+            return await this.inventoryRepository.getByDateRange(fromDate, toDate);
+        } catch (error) {
+            console.error('Error getting inventory data by date range:', error);
+            return [];
+        }
+    }
+
+    async getStockinDataByDateRange(fromDate: string, toDate: string): Promise<StockinData[]> {
+        try {
+            return await this.stockinRepository.getByDateRange(fromDate, toDate);
+        } catch (error) {
+            console.error('Error getting stockin data by date range:', error);
+            return [];
+        }
+    }
+
+    async getStockoutDataByDateRange(fromDate: string, toDate: string): Promise<StockoutData[]> {
+        try {
+            return await this.stockoutRepository.getByDateRange(fromDate, toDate);
+        } catch (error) {
+            console.error('Error getting stockout data by date range:', error);
+            return [];
         }
     }
 

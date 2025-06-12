@@ -1,4 +1,4 @@
-// src/shared/types/electron.ts - Updated with service layer architecture
+// src/shared/types/electron.ts - Updated with date filtering service layer architecture
 import { AndroidDevice } from '@/domain/entities/AndroidDevice';
 import { DeviceFile } from '@/domain/entities/DeviceFile';
 import { FileTransferResult } from '@/domain/entities/FileTransferResult';
@@ -8,9 +8,12 @@ import { Product } from '@/domain/entities/Product';
 import { Location } from '@/domain/entities/Location';
 import { Staff } from '@/domain/entities/Staff';
 import { Supplier } from '@/domain/entities/Supplier';
+import { InventoryData } from '@/domain/entities/InventoryData';
+import { StockinData } from '@/domain/entities/StockinData';
+import { StockoutData } from '@/domain/entities/StockoutData';
 import { ImportResult } from '@/domain/entities/ImportResult';
 import { FileParseResult, ImportFileType } from '@/application/services/DataImportService';
-import { DataCounts, AllData } from '@/application/services/DataService';
+import { DataCounts, AllData, FilteredDataCounts, FilteredTransactionData } from '@/application/services/DataService';
 
 export interface SyncResult {
     tableName: string;
@@ -90,7 +93,7 @@ export interface ElectronAPI {
         ): Promise<SyncResult[]>;
     };
 
-    // Data Query operations - Updated to use service layer
+    // Data Query operations - Updated to include date filtering capabilities
     data: {
         // Individual entity access
         getAllProducts(): Promise<Product[]>;
@@ -106,6 +109,13 @@ export interface ElectronAPI {
         // Aggregated service operations
         getDataCounts(): Promise<DataCounts>;
         getAllMasterData(): Promise<AllData>;
+
+        // Date-filtered data operations (NEW)
+        getInventoryDataByDateRange(fromDate: string, toDate: string): Promise<InventoryData[]>;
+        getStockinDataByDateRange(fromDate: string, toDate: string): Promise<StockinData[]>;
+        getStockoutDataByDateRange(fromDate: string, toDate: string): Promise<StockoutData[]>;
+        getDataCountsByDateRange(fromDate: string, toDate: string): Promise<FilteredDataCounts>;
+        getTransactionDataByDateRange(fromDate: string, toDate: string): Promise<FilteredTransactionData>;
     };
 }
 

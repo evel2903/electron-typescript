@@ -446,6 +446,60 @@ ipcMain.handle('data:getAllMasterData', async () => {
     }
 });
 
+// IPC Handlers for Date-Filtered Data Query operations
+ipcMain.handle('data:getInventoryDataByDateRange', async (_, fromDate: string, toDate: string) => {
+    try {
+        return await dataService.getInventoryDataByDateRange(fromDate, toDate);
+    } catch (error) {
+        console.error('Error getting inventory data by date range:', error);
+        return [];
+    }
+});
+
+ipcMain.handle('data:getStockinDataByDateRange', async (_, fromDate: string, toDate: string) => {
+    try {
+        return await dataService.getStockinDataByDateRange(fromDate, toDate);
+    } catch (error) {
+        console.error('Error getting stockin data by date range:', error);
+        return [];
+    }
+});
+
+ipcMain.handle('data:getStockoutDataByDateRange', async (_, fromDate: string, toDate: string) => {
+    try {
+        return await dataService.getStockoutDataByDateRange(fromDate, toDate);
+    } catch (error) {
+        console.error('Error getting stockout data by date range:', error);
+        return [];
+    }
+});
+
+ipcMain.handle('data:getDataCountsByDateRange', async (_, fromDate: string, toDate: string) => {
+    try {
+        return await dataService.getDataCountsByDateRange({ fromDate, toDate });
+    } catch (error) {
+        console.error('Error getting data counts by date range:', error);
+        return {
+            inventory: 0,
+            stockin: 0,
+            stockout: 0,
+        };
+    }
+});
+
+ipcMain.handle('data:getTransactionDataByDateRange', async (_, fromDate: string, toDate: string) => {
+    try {
+        return await dataService.getTransactionDataByDateRange({ fromDate, toDate });
+    } catch (error) {
+        console.error('Error getting transaction data by date range:', error);
+        return {
+            inventoryData: [],
+            stockinData: [],
+            stockoutData: [],
+        };
+    }
+});
+
 app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') {
         app.quit();

@@ -6,4 +6,6 @@ export interface IStockoutDataRepository {
         stockoutData: Omit<StockoutData, 'id' | 'createdAt' | 'updatedAt'>[],
     ): Promise<{ inserted: number; updated: number }>;
     getCount(): Promise<number>;
+    getByDateRange(fromDate: string, toDate: string): Promise<StockoutData[]>;
+    getCountByDateRange(fromDate: string, toDate: string): Promise<number>;
 }

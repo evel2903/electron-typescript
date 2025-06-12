@@ -1,4 +1,4 @@
-// src/preload.ts - Updated with service layer IPC handlers
+// src/preload.ts - Updated with date filtering service layer IPC handlers
 import { contextBridge, ipcRenderer } from 'electron';
 
 // Expose protected methods that allow the renderer process to use
@@ -82,7 +82,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
         },
     },
 
-    // Data Query APIs exposed via IPC - Updated with service layer endpoints
+    // Data Query APIs exposed via IPC - Updated with date filtering capabilities
     data: {
         // Individual entity access (maintained for backward compatibility)
         getAllProducts: () => ipcRenderer.invoke('data:getAllProducts'),
@@ -95,8 +95,20 @@ contextBridge.exposeInMainWorld('electronAPI', {
         getStockinDataCount: () => ipcRenderer.invoke('data:getStockinDataCount'),
         getStockoutDataCount: () => ipcRenderer.invoke('data:getStockoutDataCount'),
         
-        // New aggregated service operations
+        // Aggregated service operations
         getDataCounts: () => ipcRenderer.invoke('data:getDataCounts'),
         getAllMasterData: () => ipcRenderer.invoke('data:getAllMasterData'),
+
+        // NEW: Date-filtered data operations
+        getInventoryDataByDateRange: (fromDate: string, toDate: string) =>
+            ipcRenderer.invoke('data:getInventoryDataByDateRange', fromDate, toDate),
+        getStockinDataByDateRange: (fromDate: string, toDate: string) =>
+            ipcRenderer.invoke('data:getStockinDataByDateRange', fromDate, toDate),
+        getStockoutDataByDateRange: (fromDate: string, toDate: string) =>
+            ipcRenderer.invoke('data:getStockoutDataByDateRange', fromDate, toDate),
+        getDataCountsByDateRange: (fromDate: string, toDate: string) =>
+            ipcRenderer.invoke('data:getDataCountsByDateRange', fromDate, toDate),
+        getTransactionDataByDateRange: (fromDate: string, toDate: string) =>
+            ipcRenderer.invoke('data:getTransactionDataByDateRange', fromDate, toDate),
     },
 });

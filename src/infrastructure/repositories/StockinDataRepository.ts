@@ -119,6 +119,37 @@ export class StockinDataRepository implements IStockinDataRepository {
         }
     }
 
+    async getByDateRange(fromDate: string, toDate: string): Promise<StockinData[]> {
+        try {
+            this.logger.info(`Fetching stockin data from ${fromDate} to ${toDate}`);
+            
+            const rows = await this.sqliteService.all<DatabaseStockinData>(
+                'SELECT * FROM stockin_data WHERE input_date >= ? AND input_date <= ? ORDER BY input_date DESC, created_at DESC',
+                [fromDate, toDate]
+            );
+
+            const result = rows.map((row) => this.mapDatabaseStockinToEntity(row));
+            this.logger.info(`Found ${result.length} stockin records in date range`);
+            return result;
+        } catch (error) {
+            this.logger.error('Failed to get stockin data by date range:', error as Error);
+            throw error;
+        }
+    }
+
+    async getCountByDateRange(fromDate: string, toDate: string): Promise<number> {
+        try {
+            const result = await this.sqliteService.get<{ count: number }>(
+                'SELECT COUNT(*) as count FROM stockin_data WHERE input_date >= ? AND input_date <= ?',
+                [fromDate, toDate]
+            );
+            return result?.count || 0;
+        } catch (error) {
+            this.logger.error('Failed to get stockin data count by date range:', error as Error);
+            return 0;
+        }
+    }
+
     private async findExistingRecord(
         stockin: Omit<StockinData, 'id' | 'createdAt' | 'updatedAt'>,
     ): Promise<DatabaseStockinData | null> {
@@ -134,5 +165,28 @@ export class StockinDataRepository implements IStockinDataRepository {
             this.logger.error('Failed to find existing stockin record:', error as Error);
             return null;
         }
+    }
+
+    private mapDatabaseStockinToEntity(dbStockin: DatabaseStockinData): StockinData {
+        return {
+            id: dbStockin.id,
+            inputDate: dbStockin.input_date,
+            supplierCode: dbStockin.supplier_code || undefined,
+            supplierName: dbStockin.supplier_name || undefined,
+            slipNumber: dbStockin.slip_number,
+            location: dbStockin.location,
+            shelfNo: dbStockin.shelf_no,
+            shelfPosition: dbStockin.shelf_position,
+            productCode: dbStockin.product_code,
+            quantity: dbStockin.quantity,
+            staffCode: dbStockin.staff_code,
+            shopCode: dbStockin.shop_code,
+            note: dbStockin.note,
+            updateDate: dbStockin.update_date || undefined,
+            updateTime: dbStockin.update_time || undefined,
+            ignoreTrigger: Boolean(dbStockin.ignore_trigger),
+            createdAt: new Date(dbStockin.created_at),
+            updatedAt: new Date(dbStockin.updated_at),
+        };
     }
 }
