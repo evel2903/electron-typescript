@@ -1,4 +1,4 @@
-// src/presentation/pages/ProductStatusPage.tsx - Simplified product status display
+// src/presentation/pages/ProductStatusPage.tsx - Enhanced with Excel export functionality
 import React, { useState, useEffect } from 'react';
 import {
     Container,
@@ -34,6 +34,7 @@ import {
     InputLabel,
     Select,
     MenuItem,
+    Snackbar,
 } from '@mui/material';
 import {
     Category,
@@ -45,6 +46,7 @@ import {
     Warning,
     CheckCircle,
     Error as ErrorIcon,
+    GetApp,
 } from '@mui/icons-material';
 import { Product } from '@/domain/entities/Product';
 import { RendererDataService } from '@/application/services/DIContainer';
@@ -59,6 +61,7 @@ interface ProductWithStatus extends Product {
 export const ProductStatusPage: React.FC = () => {
     const [loading, setLoading] = useState<boolean>(false);
     const [error, setError] = useState<string | null>(null);
+    const [success, setSuccess] = useState<string | null>(null);
     const [products, setProducts] = useState<Product[]>([]);
     const [filteredProducts, setFilteredProducts] = useState<ProductWithStatus[]>([]);
 
@@ -104,9 +107,7 @@ export const ProductStatusPage: React.FC = () => {
         }
     };
 
-    const calculateProductStatus = (
-        product: Product,
-    ): { status: ProductStatus; color: 'success' | 'warning' | 'error' | 'default' } => {
+    const calculateProductStatus = (product: Product): { status: ProductStatus; color: 'success' | 'warning' | 'error' | 'default' } => {
         const { boxQuantity, stockInAlert, stockOutAlert } = product;
 
         // If no alerts are set, return default status
@@ -120,7 +121,7 @@ export const ProductStatusPage: React.FC = () => {
         }
 
         // Low Stock: Stock is below normal but above critical
-        if (stockOutAlert > 0 && boxQuantity <= stockOutAlert * 1.5) {
+        if (stockOutAlert > 0 && boxQuantity <= (stockOutAlert * 1.5)) {
             return { status: 'Low Stock', color: 'warning' };
         }
 
@@ -138,27 +139,26 @@ export const ProductStatusPage: React.FC = () => {
 
         // Apply filters
         if (filters.productCode) {
-            filtered = filtered.filter(
-                (product) =>
-                    product.janCode.toLowerCase().includes(filters.productCode.toLowerCase()) ||
-                    product.productName.toLowerCase().includes(filters.productCode.toLowerCase()),
+            filtered = filtered.filter(product =>
+                product.janCode.toLowerCase().includes(filters.productCode.toLowerCase()) ||
+                product.productName.toLowerCase().includes(filters.productCode.toLowerCase())
             );
         }
 
         if (filters.productName) {
-            filtered = filtered.filter((product) =>
-                product.productName.toLowerCase().includes(filters.productName.toLowerCase()),
+            filtered = filtered.filter(product =>
+                product.productName.toLowerCase().includes(filters.productName.toLowerCase())
             );
         }
 
         if (filters.supplierCode) {
-            filtered = filtered.filter((product) =>
-                product.supplierCode.toLowerCase().includes(filters.supplierCode.toLowerCase()),
+            filtered = filtered.filter(product =>
+                product.supplierCode.toLowerCase().includes(filters.supplierCode.toLowerCase())
             );
         }
 
         // Calculate status for each product
-        const productsWithStatus: ProductWithStatus[] = filtered.map((product) => {
+        const productsWithStatus: ProductWithStatus[] = filtered.map(product => {
             const { status, color } = calculateProductStatus(product);
             return {
                 ...product,
@@ -169,8 +169,8 @@ export const ProductStatusPage: React.FC = () => {
 
         // Apply status filter
         if (filters.status) {
-            const statusFiltered = productsWithStatus.filter(
-                (product) => product.status === filters.status,
+            const statusFiltered = productsWithStatus.filter(product =>
+                product.status === filters.status
             );
             setFilteredProducts(statusFiltered);
         } else {
@@ -183,6 +183,115 @@ export const ProductStatusPage: React.FC = () => {
 
     const handleRefresh = () => {
         loadProducts();
+    };
+
+    const handleDownloadExcel = () => {
+        try {
+            const XLSX = require('xlsx');
+            
+            // Prepare comprehensive data for Excel export including summary information
+            const summaryData = [
+                ['Product Status Report'],
+                ['Generated Date:', new Date().toLocaleString()],
+                ['Total Products:', filteredProducts.length.toString()],
+                ['Normal Status:', statusCounts.normal.toString()],
+                ['Low Stock:', statusCounts.lowStock.toString()],
+                ['Critical:', statusCounts.critical.toString()],
+                ['Overstocked:', statusCounts.overstocked.toString()],
+                ['No Alert Set:', statusCounts.noAlert.toString()],
+                [], // Empty row for spacing
+                ['Filters Applied:'],
+                ['Product Code Filter:', filters.productCode || 'None'],
+                ['Product Name Filter:', filters.productName || 'None'],
+                ['Supplier Code Filter:', filters.supplierCode || 'None'],
+                ['Status Filter:', filters.status || 'All Status'],
+                [], // Empty row for spacing
+                ['Product Details:'],
+            ];
+
+            // Prepare detailed product data
+            const productData = filteredProducts.map((product, index) => ({
+                'No.': index + 1,
+                'JAN Code': product.janCode,
+                'Product Name': product.productName,
+                'Supplier Code': product.supplierCode || '',
+                'Box Quantity': product.boxQuantity,
+                'Stock In Alert Threshold': product.stockInAlert,
+                'Stock Out Alert Threshold': product.stockOutAlert,
+                'Current Status': product.status,
+                'Status Explanation': getStatusExplanation(product),
+                'Created Date': product.createdAt.toLocaleDateString(),
+                'Last Updated': product.updatedAt.toLocaleDateString(),
+            }));
+
+            // Create workbook with multiple sheets
+            const workbook = XLSX.utils.book_new();
+
+            // Summary sheet
+            const summaryWorksheet = XLSX.utils.aoa_to_sheet(summaryData);
+            XLSX.utils.book_append_sheet(workbook, summaryWorksheet, 'Summary');
+
+            // Product details sheet
+            const productWorksheet = XLSX.utils.json_to_sheet(productData);
+            
+            // Set column widths for better readability
+            const columnWidths = [
+                { wch: 5 },   // No.
+                { wch: 15 },  // JAN Code
+                { wch: 35 },  // Product Name
+                { wch: 15 },  // Supplier Code
+                { wch: 12 },  // Box Quantity
+                { wch: 18 },  // Stock In Alert
+                { wch: 18 },  // Stock Out Alert
+                { wch: 15 },  // Status
+                { wch: 40 },  // Status Explanation
+                { wch: 15 },  // Created Date
+                { wch: 15 },  // Last Updated
+            ];
+            productWorksheet['!cols'] = columnWidths;
+
+            XLSX.utils.book_append_sheet(workbook, productWorksheet, 'Product Details');
+
+            // Generate filename with current date and time
+            const now = new Date();
+            const timestamp = now.toISOString().slice(0, 19).replace(/:/g, '-');
+            const filename = `Product_Status_Report_${timestamp}.xlsx`;
+
+            // Save the file
+            XLSX.writeFile(workbook, filename);
+
+            setSuccess(`Excel file exported successfully: ${filename} (${filteredProducts.length} products included)`);
+        } catch (error) {
+            console.error('Failed to export Excel file:', error);
+            setError('Failed to export Excel file. Please verify system permissions and try again.');
+        }
+    };
+
+    const getStatusExplanation = (product: ProductWithStatus): string => {
+        const { boxQuantity, stockInAlert, stockOutAlert, status } = product;
+        
+        switch (status) {
+            case 'Critical':
+                return `Stock level (${boxQuantity}) is at or below critical threshold (${stockOutAlert})`;
+            case 'Low Stock':
+                return `Stock level (${boxQuantity}) is below optimal range, approaching critical threshold (${stockOutAlert})`;
+            case 'Normal':
+                return `Stock level (${boxQuantity}) is within optimal range (${stockOutAlert} - ${stockInAlert})`;
+            case 'Overstocked':
+                return `Stock level (${boxQuantity}) exceeds maximum threshold (${stockInAlert})`;
+            case 'No Alert Set':
+                return 'No alert thresholds configured for monitoring';
+            default:
+                return 'Status evaluation unavailable';
+        }
+    };
+
+    const handleCloseError = () => {
+        setError(null);
+    };
+
+    const handleCloseSuccess = () => {
+        setSuccess(null);
     };
 
     const openDetailDialog = (product: ProductWithStatus) => {
@@ -203,7 +312,7 @@ export const ProductStatusPage: React.FC = () => {
             noAlert: 0,
         };
 
-        filteredProducts.forEach((product) => {
+        filteredProducts.forEach(product => {
             switch (product.status) {
                 case 'Normal':
                     counts.normal++;
@@ -229,7 +338,7 @@ export const ProductStatusPage: React.FC = () => {
     const statusCounts = getStatusCounts();
     const paginatedProducts = filteredProducts.slice(
         page * rowsPerPage,
-        page * rowsPerPage + rowsPerPage,
+        page * rowsPerPage + rowsPerPage
     );
 
     const renderDetailDialog = () => {
@@ -294,20 +403,29 @@ export const ProductStatusPage: React.FC = () => {
                             </Typography>
                         </Box>
 
-                        <Button
-                            variant="outlined"
-                            startIcon={<Refresh />}
-                            onClick={handleRefresh}
-                            disabled={loading}
-                        >
-                            Refresh Products
-                        </Button>
+                        <Box display="flex" gap={2}>
+                            <Button
+                                variant="outlined"
+                                startIcon={<GetApp />}
+                                onClick={handleDownloadExcel}
+                                disabled={loading || filteredProducts.length === 0}
+                            >
+                                Download Excel
+                            </Button>
+                            <Button
+                                variant="outlined"
+                                startIcon={<Refresh />}
+                                onClick={handleRefresh}
+                                disabled={loading}
+                            >
+                                Refresh Products
+                            </Button>
+                        </Box>
                     </Box>
 
                     <Typography variant="body1" color="text.secondary" paragraph>
-                        Monitor product inventory status based on configured alert thresholds. View
-                        current stock levels and manage alert configurations for optimal inventory
-                        control.
+                        Monitor product inventory status based on configured alert thresholds. 
+                        View current stock levels and manage alert configurations for optimal inventory control.
                     </Typography>
 
                     {/* Summary Cards */}
@@ -488,42 +606,26 @@ export const ProductStatusPage: React.FC = () => {
                                     Product Status Overview ({filteredProducts.length} products)
                                 </Typography>
                                 <Divider sx={{ mb: 2 }} />
-
+                                
                                 <TableContainer component={Paper} elevation={1}>
                                     <Table size="small">
                                         <TableHead>
                                             <TableRow sx={{ backgroundColor: '#f5f5f5' }}>
-                                                <TableCell>
-                                                    <strong>Code</strong>
-                                                </TableCell>
-                                                <TableCell>
-                                                    <strong>Product Name</strong>
-                                                </TableCell>
-                                                <TableCell align="right">
-                                                    <strong>Box Qty</strong>
-                                                </TableCell>
-                                                <TableCell align="center">
-                                                    <strong>Status</strong>
-                                                </TableCell>
-                                                <TableCell align="center">
-                                                    <strong>Actions</strong>
-                                                </TableCell>
+                                                <TableCell><strong>Code</strong></TableCell>
+                                                <TableCell><strong>Product Name</strong></TableCell>
+                                                <TableCell align="right"><strong>Box Qty</strong></TableCell>
+                                                <TableCell align="center"><strong>Status</strong></TableCell>
+                                                <TableCell align="center"><strong>Actions</strong></TableCell>
                                             </TableRow>
                                         </TableHead>
                                         <TableBody>
                                             {paginatedProducts.map((product, index) => (
                                                 <TableRow key={index} hover>
                                                     <TableCell>
-                                                        <Typography
-                                                            variant="body2"
-                                                            fontWeight="medium"
-                                                        >
+                                                        <Typography variant="body2" fontWeight="medium">
                                                             {product.janCode}
                                                         </Typography>
-                                                        <Typography
-                                                            variant="caption"
-                                                            color="text.secondary"
-                                                        >
+                                                        <Typography variant="caption" color="text.secondary">
                                                             {product.supplierCode || 'No Supplier'}
                                                         </Typography>
                                                     </TableCell>
@@ -533,19 +635,11 @@ export const ProductStatusPage: React.FC = () => {
                                                         </Typography>
                                                     </TableCell>
                                                     <TableCell align="right">
-                                                        <Typography
-                                                            variant="body2"
-                                                            fontWeight="medium"
-                                                        >
+                                                        <Typography variant="body2" fontWeight="medium">
                                                             {product.boxQuantity.toLocaleString()}
                                                         </Typography>
-                                                        <Typography
-                                                            variant="caption"
-                                                            color="text.secondary"
-                                                            display="block"
-                                                        >
-                                                            Alert: {product.stockInAlert}-
-                                                            {product.stockOutAlert}
+                                                        <Typography variant="caption" color="text.secondary" display="block">
+                                                            Alert: {product.stockOutAlert}-{product.stockInAlert}
                                                         </Typography>
                                                     </TableCell>
                                                     <TableCell align="center">
@@ -554,13 +648,9 @@ export const ProductStatusPage: React.FC = () => {
                                                             size="small"
                                                             color={product.statusColor}
                                                             icon={
-                                                                product.status === 'Critical' ? (
-                                                                    <ErrorIcon />
-                                                                ) : product.status === 'Normal' ? (
-                                                                    <CheckCircle />
-                                                                ) : (
-                                                                    <Warning />
-                                                                )
+                                                                product.status === 'Critical' ? <ErrorIcon /> :
+                                                                product.status === 'Normal' ? <CheckCircle /> :
+                                                                <Warning />
                                                             }
                                                         />
                                                     </TableCell>
@@ -568,9 +658,7 @@ export const ProductStatusPage: React.FC = () => {
                                                         <Tooltip title="View Details">
                                                             <IconButton
                                                                 size="small"
-                                                                onClick={() =>
-                                                                    openDetailDialog(product)
-                                                                }
+                                                                onClick={() => openDetailDialog(product)}
                                                             >
                                                                 <Visibility />
                                                             </IconButton>
@@ -581,7 +669,7 @@ export const ProductStatusPage: React.FC = () => {
                                         </TableBody>
                                     </Table>
                                 </TableContainer>
-
+                                
                                 <TablePagination
                                     rowsPerPageOptions={[10, 25, 50, 100]}
                                     component="div"
@@ -602,6 +690,30 @@ export const ProductStatusPage: React.FC = () => {
 
             {/* Detail Dialog */}
             {renderDetailDialog()}
+
+            {/* Success Snackbar */}
+            <Snackbar
+                open={!!success}
+                autoHideDuration={4000}
+                onClose={handleCloseSuccess}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+            >
+                <Alert onClose={handleCloseSuccess} severity="success" sx={{ width: '100%' }}>
+                    {success}
+                </Alert>
+            </Snackbar>
+
+            {/* Error Snackbar */}
+            <Snackbar
+                open={!!error}
+                autoHideDuration={6000}
+                onClose={handleCloseError}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+            >
+                <Alert onClose={handleCloseError} severity="error" sx={{ width: '100%' }}>
+                    {error}
+                </Alert>
+            </Snackbar>
         </>
     );
 };
