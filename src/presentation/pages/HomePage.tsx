@@ -1,10 +1,11 @@
-// src/presentation/pages/HomePage.tsx - Updated with ReportsPage
+// src/presentation/pages/HomePage.tsx - Updated with ProductStatusPage
 import React, { useState, useEffect } from 'react';
 import { Box } from '@mui/material';
 import { Header } from '../components/Header';
 import { ImportPage } from './ImportPage';
 import { GetDataPage } from './GetDataPage';
 import { ReportsPage } from './ReportsPage';
+import { ProductStatusPage } from './ProductStatusPage';
 import { Tab2Page } from './Tab2Page';
 import { SettingsPage } from './SettingsPage';
 import { DIContainer } from '@/application/services/DIContainer';
@@ -46,8 +47,10 @@ export const HomePage: React.FC = () => {
             case 2:
                 return <ReportsPage />;
             case 3:
-                return <Tab2Page />;
+                return <ProductStatusPage />;
             case 4:
+                return <Tab2Page />;
+            case 5:
                 return <SettingsPage />;
             default:
                 return <ImportPage connectedDevice={selectedDevice} />;
