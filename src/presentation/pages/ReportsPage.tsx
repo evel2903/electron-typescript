@@ -71,6 +71,16 @@ interface EnrichedStockoutData extends StockoutData {
     productName?: string;
 }
 
+interface ProductStockMovement {
+    productCode: string;
+    productName: string;
+    beginningStock: number;
+    totalImported: number;
+    totalExported: number;
+    endingStock: number;
+    netMovement: number;
+}
+
 function TabPanel(props: TabPanelProps) {
     const { children, value, index, ...other } = props;
 
@@ -107,10 +117,17 @@ export const ReportsPage: React.FC = () => {
         stockout: number;
     }>({ inventory: 0, stockin: 0, stockout: 0 });
 
+    // Overview report states
+    const [overviewData, setOverviewData] = useState<ProductStockMovement[]>([]);
+    const [selectedProductCode, setSelectedProductCode] = useState<string>('');
+    const [allStockinData, setAllStockinData] = useState<EnrichedStockinData[]>([]);
+    const [allStockoutData, setAllStockoutData] = useState<EnrichedStockoutData[]>([]);
+
     // Pagination states
     const [inventoryPage, setInventoryPage] = useState(0);
     const [stockinPage, setStockinPage] = useState(0);
     const [stockoutPage, setStockoutPage] = useState(0);
+    const [overviewPage, setOverviewPage] = useState(0);
     const [rowsPerPage, setRowsPerPage] = useState(25);
 
     // Detail dialog state
@@ -192,6 +209,94 @@ export const ReportsPage: React.FC = () => {
         };
     };
 
+    const calculateStockMovements = async (
+        fromDate: string,
+        toDate: string,
+        products: Product[],
+    ): Promise<ProductStockMovement[]> => {
+        try {
+            // Get all historical data to calculate beginning stock
+            const [allStockin, allStockout] = await Promise.all([
+                dataService.getStockinDataByDateRange('2020/01/01', '2030/12/31'),
+                dataService.getStockoutDataByDateRange('2020/01/01', '2030/12/31'),
+            ]);
+
+            // Enrich historical data with product names
+            const { enrichedStockin, enrichedStockout } = enrichDataWithProductNames(
+                [],
+                allStockin,
+                allStockout,
+                products,
+            );
+
+            setAllStockinData(enrichedStockin);
+            setAllStockoutData(enrichedStockout);
+
+            const movements: ProductStockMovement[] = [];
+
+            // Calculate movements for each product that has transactions
+            const productCodes = new Set([
+                ...enrichedStockin.map(item => item.productCode),
+                ...enrichedStockout.map(item => item.productCode),
+            ]);
+
+            for (const productCode of productCodes) {
+                const product = products.find(p => p.janCode === productCode);
+                const productName = product?.productName || 'Unknown Product';
+
+                // Calculate beginning stock (all transactions before fromDate)
+                const beginningStockin = enrichedStockin
+                    .filter(item => item.productCode === productCode && item.inputDate < fromDate)
+                    .reduce((sum, item) => sum + item.quantity, 0);
+
+                const beginningStockout = enrichedStockout
+                    .filter(item => item.productCode === productCode && item.inputDate < fromDate)
+                    .reduce((sum, item) => sum + item.quantity, 0);
+
+                const beginningStock = beginningStockin - beginningStockout;
+
+                // Calculate movements in the period
+                const totalImported = enrichedStockin
+                    .filter(item => 
+                        item.productCode === productCode && 
+                        item.inputDate >= fromDate && 
+                        item.inputDate <= toDate
+                    )
+                    .reduce((sum, item) => sum + item.quantity, 0);
+
+                const totalExported = enrichedStockout
+                    .filter(item => 
+                        item.productCode === productCode && 
+                        item.inputDate >= fromDate && 
+                        item.inputDate <= toDate
+                    )
+                    .reduce((sum, item) => sum + item.quantity, 0);
+
+                const endingStock = beginningStock + totalImported - totalExported;
+                const netMovement = totalImported - totalExported;
+
+                // Only include products that have activity in the period or non-zero beginning stock
+                if (totalImported > 0 || totalExported > 0 || beginningStock !== 0) {
+                    movements.push({
+                        productCode,
+                        productName,
+                        beginningStock,
+                        totalImported,
+                        totalExported,
+                        endingStock,
+                        netMovement,
+                    });
+                }
+            }
+
+            // Sort by product name
+            return movements.sort((a, b) => a.productName.localeCompare(b.productName));
+        } catch (error) {
+            console.error('Error calculating stock movements:', error);
+            return [];
+        }
+    };
+
     const loadReportData = async () => {
         if (!fromDate || !toDate) return;
 
@@ -229,10 +334,15 @@ export const ReportsPage: React.FC = () => {
             setStockoutData(enrichedStockout);
             setDataCounts(countsResult);
 
+            // Calculate overview data
+            const overviewResult = await calculateStockMovements(apiFromDate, apiToDate, productsResult);
+            setOverviewData(overviewResult);
+
             // Reset pagination when data changes
             setInventoryPage(0);
             setStockinPage(0);
             setStockoutPage(0);
+            setOverviewPage(0);
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Failed to load report data');
         } finally {
@@ -269,28 +379,33 @@ export const ReportsPage: React.FC = () => {
             // Get filtered data and tab info for current tab only
             let filteredData: any[] = [];
             let tabName = '';
-            let dataType: 'inventory' | 'stockin' | 'stockout' = 'inventory';
+            let dataType: 'inventory' | 'stockin' | 'stockout' | 'overview' = 'inventory';
             
             switch (currentTab) {
                 case 0:
+                    filteredData = getFilteredOverviewData();
+                    tabName = 'Overview';
+                    dataType = 'overview';
+                    break;
+                case 1:
                     filteredData = getFilteredData(inventoryData, 'inventory');
                     tabName = 'Inventory';
                     dataType = 'inventory';
                     break;
-                case 1:
+                case 2:
                     filteredData = getFilteredData(stockinData, 'stockin');
                     tabName = 'Stock_In';
                     dataType = 'stockin';
                     break;
-                case 2:
+                case 3:
                     filteredData = getFilteredData(stockoutData, 'stockout');
                     tabName = 'Stock_Out';
                     dataType = 'stockout';
                     break;
                 default:
-                    filteredData = getFilteredData(inventoryData, 'inventory');
-                    tabName = 'Inventory';
-                    dataType = 'inventory';
+                    filteredData = getFilteredOverviewData();
+                    tabName = 'Overview';
+                    dataType = 'overview';
             }
 
             // Prepare summary data for Excel export
@@ -321,7 +436,23 @@ export const ReportsPage: React.FC = () => {
                 let sheetData: any[] = [];
                 let columnWidths: any[] = [];
 
-                if (dataType === 'inventory') {
+                if (dataType === 'overview') {
+                    sheetData = filteredData.map((item, index) => ({
+                        'No.': index + 1,
+                        'Product Code': item.productCode,
+                        'Product Name': item.productName,
+                        'Beginning Stock': item.beginningStock,
+                        'Total Imported': item.totalImported,
+                        'Total Exported': item.totalExported,
+                        'Net Movement': item.netMovement,
+                        'Ending Stock': item.endingStock,
+                    }));
+
+                    columnWidths = [
+                        { wch: 5 }, { wch: 15 }, { wch: 30 }, { wch: 15 }, { wch: 15 },
+                        { wch: 15 }, { wch: 15 }, { wch: 15 },
+                    ];
+                } else if (dataType === 'inventory') {
                     sheetData = filteredData.map((item, index) => ({
                         'No.': index + 1,
                         'Date': item.inputDate,
@@ -410,6 +541,17 @@ export const ReportsPage: React.FC = () => {
         setDetailDialog({ open: false, data: null, type: 'inventory' });
     };
 
+    const getFilteredOverviewData = () => {
+        return overviewData.filter((item) => {
+            const productMatch =
+                !selectedProductCode || 
+                item.productCode.toLowerCase().includes(selectedProductCode.toLowerCase()) ||
+                item.productName.toLowerCase().includes(selectedProductCode.toLowerCase());
+            
+            return productMatch;
+        });
+    };
+
     const getFilteredData = (data: any[], type: 'inventory' | 'stockin' | 'stockout') => {
         return data.filter((item) => {
             const staffMatch =
@@ -434,6 +576,101 @@ export const ReportsPage: React.FC = () => {
 
             return staffMatch && warehouseMatch && productMatch;
         });
+    };
+
+    const renderOverviewTable = () => {
+        const filteredData = getFilteredOverviewData();
+        const paginatedData = filteredData.slice(
+            overviewPage * rowsPerPage,
+            overviewPage * rowsPerPage + rowsPerPage,
+        );
+
+        return (
+            <Box>
+                <Box mb={2}>
+                    <TextField
+                        label="Search Products"
+                        value={selectedProductCode}
+                        onChange={(e) => setSelectedProductCode(e.target.value)}
+                        placeholder="Filter by product code or name"
+                        size="small"
+                        sx={{ minWidth: 300 }}
+                    />
+                </Box>
+                <TableContainer component={Paper} elevation={1}>
+                    <Table size="small">
+                        <TableHead>
+                            <TableRow sx={{ backgroundColor: '#f5f5f5' }}>
+                                <TableCell><strong>Product Code</strong></TableCell>
+                                <TableCell><strong>Product Name</strong></TableCell>
+                                <TableCell align="right"><strong>Beginning Stock</strong></TableCell>
+                                <TableCell align="right"><strong>Total Imported</strong></TableCell>
+                                <TableCell align="right"><strong>Total Exported</strong></TableCell>
+                                <TableCell align="right"><strong>Net Movement</strong></TableCell>
+                                <TableCell align="right"><strong>Ending Stock</strong></TableCell>
+                                <TableCell><strong>Actions</strong></TableCell>
+                            </TableRow>
+                        </TableHead>
+                        <TableBody>
+                            {paginatedData.map((item, index) => (
+                                <TableRow key={index} hover>
+                                    <TableCell>{item.productCode}</TableCell>
+                                    <TableCell>{item.productName}</TableCell>
+                                    <TableCell align="right">{item.beginningStock.toLocaleString()}</TableCell>
+                                    <TableCell align="right" sx={{ color: 'success.main' }}>
+                                        {item.totalImported.toLocaleString()}
+                                    </TableCell>
+                                    <TableCell align="right" sx={{ color: 'error.main' }}>
+                                        {item.totalExported.toLocaleString()}
+                                    </TableCell>
+                                    <TableCell align="right">
+                                        <Chip
+                                            label={item.netMovement.toLocaleString()}
+                                            size="small"
+                                            color={item.netMovement >= 0 ? 'success' : 'error'}
+                                        />
+                                    </TableCell>
+                                    <TableCell align="right">
+                                        <Typography 
+                                            variant="body2" 
+                                            fontWeight="bold"
+                                            color={item.endingStock < 0 ? 'error.main' : 'text.primary'}
+                                        >
+                                            {item.endingStock.toLocaleString()}
+                                        </Typography>
+                                    </TableCell>
+                                    <TableCell>
+                                        <Tooltip title="View detailed transactions for this product">
+                                            <IconButton
+                                                size="small"
+                                                onClick={() => {
+                                                    setSelectedProductCode(item.productCode);
+                                                    setCurrentTab(1); // Switch to inventory tab
+                                                }}
+                                            >
+                                                <Visibility />
+                                            </IconButton>
+                                        </Tooltip>
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                </TableContainer>
+                <TablePagination
+                    rowsPerPageOptions={[10, 25, 50, 100]}
+                    component="div"
+                    count={filteredData.length}
+                    rowsPerPage={rowsPerPage}
+                    page={overviewPage}
+                    onPageChange={(_, newPage) => setOverviewPage(newPage)}
+                    onRowsPerPageChange={(e) => {
+                        setRowsPerPage(parseInt(e.target.value, 10));
+                        setOverviewPage(0);
+                    }}
+                />
+            </Box>
+        );
     };
 
     const renderInventoryTable = () => {
@@ -737,10 +974,12 @@ export const ReportsPage: React.FC = () => {
     const getCurrentTabFilteredRecords = () => {
         switch (currentTab) {
             case 0:
-                return getFilteredData(inventoryData, 'inventory').length;
+                return getFilteredOverviewData().length;
             case 1:
-                return getFilteredData(stockinData, 'stockin').length;
+                return getFilteredData(inventoryData, 'inventory').length;
             case 2:
+                return getFilteredData(stockinData, 'stockin').length;
+            case 3:
                 return getFilteredData(stockoutData, 'stockout').length;
             default:
                 return 0;
@@ -761,7 +1000,7 @@ export const ReportsPage: React.FC = () => {
                         </Box>
 
                         <Box display="flex" gap={2}>
-                            <Tooltip title={`Export ${currentTab === 0 ? 'Inventory' : currentTab === 1 ? 'Stock In' : 'Stock Out'} data to Excel`}>
+                            <Tooltip title={`Export ${currentTab === 0 ? 'Overview' : currentTab === 1 ? 'Inventory' : currentTab === 2 ? 'Stock In' : 'Stock Out'} data to Excel`}>
                                 <span>
                                     <Button
                                         variant="outlined"
@@ -978,6 +1217,11 @@ export const ReportsPage: React.FC = () => {
                             <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
                                 <Tabs value={currentTab} onChange={handleTabChange}>
                                     <Tab
+                                        label={`Overview (${getFilteredOverviewData().length})`}
+                                        icon={<Assessment />}
+                                        iconPosition="start"
+                                    />
+                                    <Tab
                                         label={`Inventory (${getFilteredData(inventoryData, 'inventory').length})`}
                                         icon={<Inventory />}
                                         iconPosition="start"
@@ -996,14 +1240,18 @@ export const ReportsPage: React.FC = () => {
                             </Box>
 
                             <TabPanel value={currentTab} index={0}>
-                                {renderInventoryTable()}
+                                {renderOverviewTable()}
                             </TabPanel>
 
                             <TabPanel value={currentTab} index={1}>
-                                {renderStockinTable()}
+                                {renderInventoryTable()}
                             </TabPanel>
 
                             <TabPanel value={currentTab} index={2}>
+                                {renderStockinTable()}
+                            </TabPanel>
+
+                            <TabPanel value={currentTab} index={3}>
                                 {renderStockoutTable()}
                             </TabPanel>
                         </Card>
