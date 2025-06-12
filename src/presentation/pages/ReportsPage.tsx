@@ -1,4 +1,4 @@
-// src/presentation/pages/ReportsPage.tsx - Enhanced with Excel export functionality
+// src/presentation/pages/ReportsPage.tsx - Updated with specified fields and product joins
 import React, { useState, useEffect } from 'react';
 import {
     Container,
@@ -32,10 +32,6 @@ import {
     ListItem,
     ListItemText,
     Divider,
-    FormControl,
-    InputLabel,
-    Select,
-    MenuItem,
     Snackbar,
 } from '@mui/material';
 import {
@@ -53,12 +49,26 @@ import {
 import { InventoryData } from '@/domain/entities/InventoryData';
 import { StockinData } from '@/domain/entities/StockinData';
 import { StockoutData } from '@/domain/entities/StockoutData';
+import { Product } from '@/domain/entities/Product';
+import { Supplier } from '@/domain/entities/Supplier';
 import { RendererDataService } from '@/application/services/DIContainer';
 
 interface TabPanelProps {
     children?: React.ReactNode;
     index: number;
     value: number;
+}
+
+interface EnrichedInventoryData extends InventoryData {
+    productName?: string;
+}
+
+interface EnrichedStockinData extends StockinData {
+    productName?: string;
+}
+
+interface EnrichedStockoutData extends StockoutData {
+    productName?: string;
 }
 
 function TabPanel(props: TabPanelProps) {
@@ -86,9 +96,11 @@ export const ReportsPage: React.FC = () => {
     const [success, setSuccess] = useState<string | null>(null);
 
     // Data states
-    const [inventoryData, setInventoryData] = useState<InventoryData[]>([]);
-    const [stockinData, setStockinData] = useState<StockinData[]>([]);
-    const [stockoutData, setStockoutData] = useState<StockoutData[]>([]);
+    const [inventoryData, setInventoryData] = useState<EnrichedInventoryData[]>([]);
+    const [stockinData, setStockinData] = useState<EnrichedStockinData[]>([]);
+    const [stockoutData, setStockoutData] = useState<EnrichedStockoutData[]>([]);
+    const [products, setProducts] = useState<Product[]>([]);
+    const [suppliers, setSuppliers] = useState<Supplier[]>([]);
     const [dataCounts, setDataCounts] = useState<{
         inventory: number;
         stockin: number;
@@ -111,9 +123,9 @@ export const ReportsPage: React.FC = () => {
     // Filter states
     const [filters, setFilters] = useState<{
         staffCode: string;
-        shopCode: string;
+        warehouse: string;
         productCode: string;
-    }>({ staffCode: '', shopCode: '', productCode: '' });
+    }>({ staffCode: '', warehouse: '', productCode: '' });
 
     const dataService = RendererDataService.getInstance();
 
@@ -145,6 +157,41 @@ export const ReportsPage: React.FC = () => {
         return `${year}/${month}/${day}`;
     };
 
+    const enrichDataWithProductNames = (
+        inventoryData: InventoryData[],
+        stockinData: StockinData[],
+        stockoutData: StockoutData[],
+        products: Product[],
+    ): {
+        enrichedInventory: EnrichedInventoryData[];
+        enrichedStockin: EnrichedStockinData[];
+        enrichedStockout: EnrichedStockoutData[];
+    } => {
+        // Create product lookup maps
+        const productByJanCode = new Map(products.map(p => [p.janCode, p.productName]));
+
+        const enrichedInventory = inventoryData.map(item => ({
+            ...item,
+            productName: item.janCode ? productByJanCode.get(item.janCode) || 'Unknown Product' : 'N/A',
+        }));
+
+        const enrichedStockin = stockinData.map(item => ({
+            ...item,
+            productName: productByJanCode.get(item.productCode) || 'Unknown Product',
+        }));
+
+        const enrichedStockout = stockoutData.map(item => ({
+            ...item,
+            productName: productByJanCode.get(item.productCode) || 'Unknown Product',
+        }));
+
+        return {
+            enrichedInventory,
+            enrichedStockin,
+            enrichedStockout,
+        };
+    };
+
     const loadReportData = async () => {
         if (!fromDate || !toDate) return;
 
@@ -156,17 +203,30 @@ export const ReportsPage: React.FC = () => {
             const apiToDate = formatDateForAPI(toDate);
 
             // Load all data in parallel
-            const [inventoryResult, stockinResult, stockoutResult, countsResult] =
+            const [inventoryResult, stockinResult, stockoutResult, countsResult, productsResult, suppliersResult] =
                 await Promise.all([
                     dataService.getInventoryDataByDateRange(apiFromDate, apiToDate),
                     dataService.getStockinDataByDateRange(apiFromDate, apiToDate),
                     dataService.getStockoutDataByDateRange(apiFromDate, apiToDate),
                     dataService.getDataCountsByDateRange(apiFromDate, apiToDate),
+                    dataService.getProducts(),
+                    dataService.getSuppliers(),
                 ]);
 
-            setInventoryData(inventoryResult);
-            setStockinData(stockinResult);
-            setStockoutData(stockoutResult);
+            setProducts(productsResult);
+            setSuppliers(suppliersResult);
+
+            // Enrich data with product names
+            const { enrichedInventory, enrichedStockin, enrichedStockout } = enrichDataWithProductNames(
+                inventoryResult,
+                stockinResult,
+                stockoutResult,
+                productsResult,
+            );
+
+            setInventoryData(enrichedInventory);
+            setStockinData(enrichedStockin);
+            setStockoutData(enrichedStockout);
             setDataCounts(countsResult);
 
             // Reset pagination when data changes
@@ -195,6 +255,11 @@ export const ReportsPage: React.FC = () => {
 
         setFromDate(formatDateForInput(startDate));
         setToDate(formatDateForInput(today));
+    };
+
+    const getSupplierName = (supplierCode: string): string => {
+        const supplier = suppliers.find(s => s.supplierCode === supplierCode);
+        return supplier ? supplier.supplierName : supplierCode;
     };
 
     const handleDownloadExcel = () => {
@@ -238,7 +303,7 @@ export const ReportsPage: React.FC = () => {
                 [], // Empty row for spacing
                 ['Filters Applied:'],
                 ['Staff Code Filter:', filters.staffCode || 'None'],
-                ['Shop Code Filter:', filters.shopCode || 'None'],
+                ['Warehouse Filter:', filters.warehouse || 'None'],
                 ['Product Code Filter:', filters.productCode || 'None'],
                 [], // Empty row for spacing
                 ['Data Details:'],
@@ -259,73 +324,53 @@ export const ReportsPage: React.FC = () => {
                 if (dataType === 'inventory') {
                     sheetData = filteredData.map((item, index) => ({
                         'No.': index + 1,
-                        'Input Date': item.inputDate,
-                        'Staff Code': item.staffCode,
-                        'Shop Code': item.shopCode,
-                        'Shelf Number': item.shelfNumber,
-                        'Shelf Position': item.shelfPosition,
-                        'JAN Code': item.janCode || 'N/A',
-                        'Quantity': item.quantity,
+                        'Date': item.inputDate,
+                        'Staff': item.staffCode,
+                        'Warehouse': item.shopCode,
+                        'Code': item.janCode || 'N/A',
+                        'Product Name': item.productName || 'N/A',
                         'System Quantity': item.systemQuantity,
-                        'Quantity Discrepancy': item.quantityDiscrepancy,
-                        'Cost': item.cost,
-                        'Price': item.price,
-                        'Note': item.note || 'N/A',
-                        'Update Date': item.updateDate || 'N/A',
-                        'Update Time': item.updateTime || 'N/A',
+                        'Quantity': item.quantity,
+                        'Discrepancy': item.quantityDiscrepancy,
                     }));
 
                     columnWidths = [
-                        { wch: 5 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 },
-                        { wch: 12 }, { wch: 15 }, { wch: 10 }, { wch: 12 }, { wch: 15 },
-                        { wch: 10 }, { wch: 10 }, { wch: 25 }, { wch: 12 }, { wch: 12 },
+                        { wch: 5 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 15 },
+                        { wch: 30 }, { wch: 12 }, { wch: 10 }, { wch: 12 },
                     ];
                 } else if (dataType === 'stockin') {
                     sheetData = filteredData.map((item, index) => ({
                         'No.': index + 1,
-                        'Input Date': item.inputDate,
-                        'Slip Number': item.slipNumber,
+                        'Date': item.inputDate,
+                        'Staff': item.staffCode,
+                        'Warehouse': item.shopCode,
+                        'Code': item.productCode,
+                        'Product Name': item.productName || 'N/A',
                         'Supplier Code': item.supplierCode || 'N/A',
-                        'Supplier Name': item.supplierName || 'N/A',
-                        'Location': item.location,
-                        'Shelf Number': item.shelfNo,
-                        'Shelf Position': item.shelfPosition,
-                        'Product Code': item.productCode,
+                        'Supplier Name': getSupplierName(item.supplierCode || ''),
                         'Quantity': item.quantity,
-                        'Staff Code': item.staffCode,
-                        'Shop Code': item.shopCode,
-                        'Note': item.note || 'N/A',
-                        'Ignore Trigger': item.ignoreTrigger ? 'Yes' : 'No',
                     }));
 
                     columnWidths = [
-                        { wch: 5 }, { wch: 12 }, { wch: 15 }, { wch: 15 }, { wch: 25 },
-                        { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 15 }, { wch: 10 },
-                        { wch: 12 }, { wch: 12 }, { wch: 25 }, { wch: 12 },
+                        { wch: 5 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 15 },
+                        { wch: 30 }, { wch: 15 }, { wch: 25 }, { wch: 10 },
                     ];
                 } else if (dataType === 'stockout') {
                     sheetData = filteredData.map((item, index) => ({
                         'No.': index + 1,
-                        'Input Date': item.inputDate,
-                        'Slip Number': item.slipNumber,
-                        'Supplier Code': item.supplierCode,
+                        'Date': item.inputDate,
+                        'Staff': item.staffCode,
+                        'Warehouse': item.shopCode,
+                        'Code': item.productCode,
+                        'Product Name': item.productName || 'N/A',
                         'Department Code': item.deptCode,
                         'Department Name': item.deptName,
-                        'Location': item.location,
-                        'Shelf Number': item.shelfNo,
-                        'Shelf Position': item.shelfPosition,
-                        'Product Code': item.productCode,
                         'Quantity': item.quantity,
-                        'Staff Code': item.staffCode,
-                        'Shop Code': item.shopCode,
-                        'Note': item.note || 'N/A',
-                        'Ignore Trigger': item.ignoreTrigger ? 'Yes' : 'No',
                     }));
 
                     columnWidths = [
-                        { wch: 5 }, { wch: 12 }, { wch: 15 }, { wch: 15 }, { wch: 15 },
-                        { wch: 20 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 15 },
-                        { wch: 10 }, { wch: 12 }, { wch: 12 }, { wch: 25 }, { wch: 12 },
+                        { wch: 5 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 15 },
+                        { wch: 30 }, { wch: 15 }, { wch: 20 }, { wch: 10 },
                     ];
                 }
 
@@ -370,9 +415,9 @@ export const ReportsPage: React.FC = () => {
             const staffMatch =
                 !filters.staffCode ||
                 item.staffCode?.toLowerCase().includes(filters.staffCode.toLowerCase());
-            const shopMatch =
-                !filters.shopCode ||
-                item.shopCode?.toLowerCase().includes(filters.shopCode.toLowerCase());
+            const warehouseMatch =
+                !filters.warehouse ||
+                item.shopCode?.toLowerCase().includes(filters.warehouse.toLowerCase());
 
             let productMatch = true;
             if (filters.productCode) {
@@ -387,7 +432,7 @@ export const ReportsPage: React.FC = () => {
                 }
             }
 
-            return staffMatch && shopMatch && productMatch;
+            return staffMatch && warehouseMatch && productMatch;
         });
     };
 
@@ -404,36 +449,15 @@ export const ReportsPage: React.FC = () => {
                     <Table size="small">
                         <TableHead>
                             <TableRow sx={{ backgroundColor: '#f5f5f5' }}>
-                                <TableCell>
-                                    <strong>Date</strong>
-                                </TableCell>
-                                <TableCell>
-                                    <strong>Staff</strong>
-                                </TableCell>
-                                <TableCell>
-                                    <strong>Shop</strong>
-                                </TableCell>
-                                <TableCell>
-                                    <strong>Location</strong>
-                                </TableCell>
-                                <TableCell>
-                                    <strong>JAN Code</strong>
-                                </TableCell>
-                                <TableCell align="right">
-                                    <strong>Quantity</strong>
-                                </TableCell>
-                                <TableCell align="right">
-                                    <strong>System Qty</strong>
-                                </TableCell>
-                                <TableCell align="right">
-                                    <strong>Discrepancy</strong>
-                                </TableCell>
-                                <TableCell align="right">
-                                    <strong>Cost</strong>
-                                </TableCell>
-                                <TableCell>
-                                    <strong>Actions</strong>
-                                </TableCell>
+                                <TableCell><strong>Date</strong></TableCell>
+                                <TableCell><strong>Staff</strong></TableCell>
+                                <TableCell><strong>Warehouse</strong></TableCell>
+                                <TableCell><strong>Code</strong></TableCell>
+                                <TableCell><strong>Product Name</strong></TableCell>
+                                <TableCell align="right"><strong>System Quantity</strong></TableCell>
+                                <TableCell align="right"><strong>Quantity</strong></TableCell>
+                                <TableCell align="right"><strong>Discrepancy</strong></TableCell>
+                                <TableCell><strong>Actions</strong></TableCell>
                             </TableRow>
                         </TableHead>
                         <TableBody>
@@ -442,27 +466,16 @@ export const ReportsPage: React.FC = () => {
                                     <TableCell>{item.inputDate}</TableCell>
                                     <TableCell>{item.staffCode}</TableCell>
                                     <TableCell>{item.shopCode}</TableCell>
-                                    <TableCell>{`${item.shelfNumber}-${item.shelfPosition}`}</TableCell>
                                     <TableCell>{item.janCode || 'N/A'}</TableCell>
-                                    <TableCell align="right">
-                                        {item.quantity.toLocaleString()}
-                                    </TableCell>
-                                    <TableCell align="right">
-                                        {item.systemQuantity.toLocaleString()}
-                                    </TableCell>
+                                    <TableCell>{item.productName || 'N/A'}</TableCell>
+                                    <TableCell align="right">{item.systemQuantity.toLocaleString()}</TableCell>
+                                    <TableCell align="right">{item.quantity.toLocaleString()}</TableCell>
                                     <TableCell align="right">
                                         <Chip
                                             label={item.quantityDiscrepancy}
                                             size="small"
-                                            color={
-                                                item.quantityDiscrepancy === 0
-                                                    ? 'success'
-                                                    : 'warning'
-                                            }
+                                            color={item.quantityDiscrepancy === 0 ? 'success' : 'warning'}
                                         />
-                                    </TableCell>
-                                    <TableCell align="right">
-                                        ¥{item.cost.toLocaleString()}
                                     </TableCell>
                                     <TableCell>
                                         <IconButton
@@ -506,50 +519,28 @@ export const ReportsPage: React.FC = () => {
                     <Table size="small">
                         <TableHead>
                             <TableRow sx={{ backgroundColor: '#f5f5f5' }}>
-                                <TableCell>
-                                    <strong>Date</strong>
-                                </TableCell>
-                                <TableCell>
-                                    <strong>Slip Number</strong>
-                                </TableCell>
-                                <TableCell>
-                                    <strong>Supplier</strong>
-                                </TableCell>
-                                <TableCell>
-                                    <strong>Product Code</strong>
-                                </TableCell>
-                                <TableCell>
-                                    <strong>Location</strong>
-                                </TableCell>
-                                <TableCell align="right">
-                                    <strong>Quantity</strong>
-                                </TableCell>
-                                <TableCell>
-                                    <strong>Staff</strong>
-                                </TableCell>
-                                <TableCell>
-                                    <strong>Shop</strong>
-                                </TableCell>
-                                <TableCell>
-                                    <strong>Actions</strong>
-                                </TableCell>
+                                <TableCell><strong>Date</strong></TableCell>
+                                <TableCell><strong>Staff</strong></TableCell>
+                                <TableCell><strong>Warehouse</strong></TableCell>
+                                <TableCell><strong>Code</strong></TableCell>
+                                <TableCell><strong>Product Name</strong></TableCell>
+                                <TableCell><strong>Supplier Code</strong></TableCell>
+                                <TableCell><strong>Supplier Name</strong></TableCell>
+                                <TableCell align="right"><strong>Quantity</strong></TableCell>
+                                <TableCell><strong>Actions</strong></TableCell>
                             </TableRow>
                         </TableHead>
                         <TableBody>
                             {paginatedData.map((item, index) => (
                                 <TableRow key={index} hover>
                                     <TableCell>{item.inputDate}</TableCell>
-                                    <TableCell>{item.slipNumber}</TableCell>
-                                    <TableCell>
-                                        {item.supplierName || item.supplierCode || 'N/A'}
-                                    </TableCell>
-                                    <TableCell>{item.productCode}</TableCell>
-                                    <TableCell>{`${item.location} ${item.shelfNo}-${item.shelfPosition}`}</TableCell>
-                                    <TableCell align="right">
-                                        {item.quantity.toLocaleString()}
-                                    </TableCell>
                                     <TableCell>{item.staffCode}</TableCell>
                                     <TableCell>{item.shopCode}</TableCell>
+                                    <TableCell>{item.productCode}</TableCell>
+                                    <TableCell>{item.productName || 'N/A'}</TableCell>
+                                    <TableCell>{item.supplierCode || 'N/A'}</TableCell>
+                                    <TableCell>{getSupplierName(item.supplierCode || '')}</TableCell>
+                                    <TableCell align="right">{item.quantity.toLocaleString()}</TableCell>
                                     <TableCell>
                                         <IconButton
                                             size="small"
@@ -592,48 +583,28 @@ export const ReportsPage: React.FC = () => {
                     <Table size="small">
                         <TableHead>
                             <TableRow sx={{ backgroundColor: '#f5f5f5' }}>
-                                <TableCell>
-                                    <strong>Date</strong>
-                                </TableCell>
-                                <TableCell>
-                                    <strong>Slip Number</strong>
-                                </TableCell>
-                                <TableCell>
-                                    <strong>Department</strong>
-                                </TableCell>
-                                <TableCell>
-                                    <strong>Product Code</strong>
-                                </TableCell>
-                                <TableCell>
-                                    <strong>Location</strong>
-                                </TableCell>
-                                <TableCell align="right">
-                                    <strong>Quantity</strong>
-                                </TableCell>
-                                <TableCell>
-                                    <strong>Staff</strong>
-                                </TableCell>
-                                <TableCell>
-                                    <strong>Shop</strong>
-                                </TableCell>
-                                <TableCell>
-                                    <strong>Actions</strong>
-                                </TableCell>
+                                <TableCell><strong>Date</strong></TableCell>
+                                <TableCell><strong>Staff</strong></TableCell>
+                                <TableCell><strong>Warehouse</strong></TableCell>
+                                <TableCell><strong>Code</strong></TableCell>
+                                <TableCell><strong>Product Name</strong></TableCell>
+                                <TableCell><strong>Department Code</strong></TableCell>
+                                <TableCell><strong>Department Name</strong></TableCell>
+                                <TableCell align="right"><strong>Quantity</strong></TableCell>
+                                <TableCell><strong>Actions</strong></TableCell>
                             </TableRow>
                         </TableHead>
                         <TableBody>
                             {paginatedData.map((item, index) => (
                                 <TableRow key={index} hover>
                                     <TableCell>{item.inputDate}</TableCell>
-                                    <TableCell>{item.slipNumber}</TableCell>
-                                    <TableCell>{`${item.deptCode} - ${item.deptName}`}</TableCell>
-                                    <TableCell>{item.productCode}</TableCell>
-                                    <TableCell>{`${item.location} ${item.shelfNo}-${item.shelfPosition}`}</TableCell>
-                                    <TableCell align="right">
-                                        {item.quantity.toLocaleString()}
-                                    </TableCell>
                                     <TableCell>{item.staffCode}</TableCell>
                                     <TableCell>{item.shopCode}</TableCell>
+                                    <TableCell>{item.productCode}</TableCell>
+                                    <TableCell>{item.productName || 'N/A'}</TableCell>
+                                    <TableCell>{item.deptCode}</TableCell>
+                                    <TableCell>{item.deptName}</TableCell>
+                                    <TableCell align="right">{item.quantity.toLocaleString()}</TableCell>
                                     <TableCell>
                                         <IconButton
                                             size="small"
@@ -671,53 +642,45 @@ export const ReportsPage: React.FC = () => {
             switch (type) {
                 case 'inventory':
                     return [
-                        { label: 'Input Date', value: data.inputDate },
-                        { label: 'Staff Code', value: data.staffCode },
-                        { label: 'Shop Code', value: data.shopCode },
-                        { label: 'Shelf Number', value: data.shelfNumber },
-                        { label: 'Shelf Position', value: data.shelfPosition },
-                        { label: 'JAN Code', value: data.janCode || 'N/A' },
+                        { label: 'Date', value: data.inputDate },
+                        { label: 'Staff', value: data.staffCode },
+                        { label: 'Warehouse', value: data.shopCode },
+                        { label: 'Code', value: data.janCode || 'N/A' },
+                        { label: 'Product Name', value: data.productName || 'N/A' },
+                        { label: 'System Quantity', value: data.systemQuantity.toLocaleString() },
                         { label: 'Quantity', value: data.quantity.toLocaleString() },
+                        { label: 'Discrepancy', value: data.quantityDiscrepancy },
                         { label: 'Cost', value: `¥${data.cost.toLocaleString()}` },
                         { label: 'Price', value: `¥${data.price.toLocaleString()}` },
-                        { label: 'System Quantity', value: data.systemQuantity.toLocaleString() },
-                        { label: 'Quantity Discrepancy', value: data.quantityDiscrepancy },
                         { label: 'Note', value: data.note || 'N/A' },
-                        { label: 'Update Date', value: data.updateDate || 'N/A' },
-                        { label: 'Update Time', value: data.updateTime || 'N/A' },
                     ];
                 case 'stockin':
                     return [
-                        { label: 'Input Date', value: data.inputDate },
-                        { label: 'Slip Number', value: data.slipNumber },
+                        { label: 'Date', value: data.inputDate },
+                        { label: 'Staff', value: data.staffCode },
+                        { label: 'Warehouse', value: data.shopCode },
+                        { label: 'Code', value: data.productCode },
+                        { label: 'Product Name', value: data.productName || 'N/A' },
                         { label: 'Supplier Code', value: data.supplierCode || 'N/A' },
-                        { label: 'Supplier Name', value: data.supplierName || 'N/A' },
-                        { label: 'Location', value: data.location },
-                        { label: 'Shelf Number', value: data.shelfNo },
-                        { label: 'Shelf Position', value: data.shelfPosition },
-                        { label: 'Product Code', value: data.productCode },
+                        { label: 'Supplier Name', value: getSupplierName(data.supplierCode || '') },
                         { label: 'Quantity', value: data.quantity.toLocaleString() },
-                        { label: 'Staff Code', value: data.staffCode },
-                        { label: 'Shop Code', value: data.shopCode },
+                        { label: 'Location', value: data.location },
+                        { label: 'Slip Number', value: data.slipNumber },
                         { label: 'Note', value: data.note || 'N/A' },
-                        { label: 'Ignore Trigger', value: data.ignoreTrigger ? 'Yes' : 'No' },
                     ];
                 case 'stockout':
                     return [
-                        { label: 'Input Date', value: data.inputDate },
-                        { label: 'Slip Number', value: data.slipNumber },
-                        { label: 'Supplier Code', value: data.supplierCode },
+                        { label: 'Date', value: data.inputDate },
+                        { label: 'Staff', value: data.staffCode },
+                        { label: 'Warehouse', value: data.shopCode },
+                        { label: 'Code', value: data.productCode },
+                        { label: 'Product Name', value: data.productName || 'N/A' },
                         { label: 'Department Code', value: data.deptCode },
                         { label: 'Department Name', value: data.deptName },
-                        { label: 'Location', value: data.location },
-                        { label: 'Shelf Number', value: data.shelfNo },
-                        { label: 'Shelf Position', value: data.shelfPosition },
-                        { label: 'Product Code', value: data.productCode },
                         { label: 'Quantity', value: data.quantity.toLocaleString() },
-                        { label: 'Staff Code', value: data.staffCode },
-                        { label: 'Shop Code', value: data.shopCode },
+                        { label: 'Location', value: data.location },
+                        { label: 'Slip Number', value: data.slipNumber },
                         { label: 'Note', value: data.note || 'N/A' },
-                        { label: 'Ignore Trigger', value: data.ignoreTrigger ? 'Yes' : 'No' },
                     ];
                 default:
                     return [];
@@ -970,13 +933,13 @@ export const ReportsPage: React.FC = () => {
                                 <Grid item xs={12} sm={4}>
                                     <TextField
                                         fullWidth
-                                        label="Shop Code"
-                                        value={filters.shopCode}
+                                        label="Warehouse"
+                                        value={filters.warehouse}
                                         onChange={(e) =>
-                                            setFilters({ ...filters, shopCode: e.target.value })
+                                            setFilters({ ...filters, warehouse: e.target.value })
                                         }
                                         size="small"
-                                        placeholder="Filter by shop code"
+                                        placeholder="Filter by warehouse"
                                     />
                                 </Grid>
                                 <Grid item xs={12} sm={4}>
@@ -988,7 +951,7 @@ export const ReportsPage: React.FC = () => {
                                             setFilters({ ...filters, productCode: e.target.value })
                                         }
                                         size="small"
-                                        placeholder="Filter by product/JAN code"
+                                        placeholder="Filter by product code"
                                     />
                                 </Grid>
                             </Grid>
