@@ -3,6 +3,7 @@ import Database from 'better-sqlite3';
 import * as path from 'path';
 import * as fs from 'fs';
 import { Logger } from '@/shared/utils/logger';
+import { app } from 'electron';
 
 export class SqliteService {
     private db: Database.Database | null = null;
@@ -22,8 +23,8 @@ export class SqliteService {
             // In development, place database at project root level
             basePath = path.join(__dirname, '../');
         } else {
-            // In production, place database in application directory
-            basePath = path.dirname(process.execPath);
+            // In production, place database in the installation directory
+            basePath = path.dirname(app.getPath('exe'));
         }
         console.log(`Base path resolved to: ${basePath}`);
         const dbPath = path.join(basePath, 'app.db');

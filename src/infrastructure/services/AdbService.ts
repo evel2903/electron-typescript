@@ -6,6 +6,7 @@ import * as fs from 'fs';
 import { AndroidDevice } from '@/domain/entities/AndroidDevice';
 import { DeviceFile } from '@/domain/entities/DeviceFile';
 import { FileTransferResult } from '@/domain/entities/FileTransferResult';
+import { app } from 'electron';
 
 const execAsync = promisify(exec);
 
@@ -28,8 +29,8 @@ export class AdbService {
             // In development, we need to go up from dist/infrastructure/services/ to project root
             basePath = path.join(__dirname, '../');
         } else {
-            // In production, use the application directory
-            basePath = path.dirname(process.execPath);
+            // In production, use the resources directory
+            basePath = path.join(path.dirname(app.getPath('exe')), 'resources');
         }
 
         console.log(`Base path resolved to: ${basePath}`);

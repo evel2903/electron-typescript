@@ -2,9 +2,9 @@
     "name": "electron-clean-architecture-app",
     "version": "1.0.0",
     "description": "An Electron application following Clean Architecture principles with MUI",
+    "main": "dist/main.js",
     "scripts": {
-        "rebuild": "electron-rebuild",
-        "postinstall": "electron-rebuild",
+        "postinstall": "electron-builder install-app-deps",
         "build": "webpack --mode=production",
         "build:dev": "webpack --mode=development",
         "build:renderer": "webpack --config webpack.renderer.js --mode=development",
@@ -13,7 +13,11 @@
         "dev": "npm run build:dev && electron ./dist/main.js --dev",
         "dev:rebuild": "npm run rebuild && npm run build:dev && electron ./dist/main.js --dev",
         "lint": "eslint -c .eslintrc --ext .ts,.tsx ./src",
-        "format": "prettier --write \"src/**/*.{ts,tsx}\""
+        "format": "prettier --write \"src/**/*.{ts,tsx}\"",
+        "dist": "npm run build && electron-builder",
+        "dist:win": "npm run build && electron-builder --win",
+        "dist:win64": "npm run build && electron-builder --win --x64",
+        "pack": "npm run build && electron-builder --dir"
     },
     "author": "KSS - SangLx",
     "license": "MIT",
@@ -26,7 +30,7 @@
         "@typescript-eslint/parser": "^6.0.0",
         "css-loader": "^7.1.2",
         "electron": "^36.4.0",
-        "electron-builder": "^26.0.16",
+        "electron-builder": "^26.0.12",
         "electron-rebuild": "^3.2.9",
         "eslint": "^8.45.0",
         "html-webpack-plugin": "^5.6.3",
@@ -50,11 +54,47 @@
         "xlsx": "^0.18.5"
     },
     "build": {
+        "appId": "com.kss.kwms-lite",
+        "productName": "KSS KWMS Lite",
+        "directories": {
+            "output": "release",
+            "buildResources": "assets"
+        },
+        "files": [
+            "dist/**/*",
+            "index.html",
+            "package.json",
+            "node_modules/better-sqlite3/**/*",
+            "app.db",
+            "!src/**/*",
+            "!*.ts",
+            "!*.md"
+        ],
         "extraResources": [
             {
                 "from": "tools/",
                 "to": "tools/"
             }
-        ]
+        ],
+        "win": {
+            "target": [
+                {
+                    "target": "nsis",
+                    "arch": [
+                        "x64"
+                    ]
+                }
+            ],
+            "requestedExecutionLevel": "asInvoker",
+            "signAndEditExecutable": false
+        },
+        "nsis": {
+            "oneClick": false,
+            "allowToChangeInstallationDirectory": true,
+            "createDesktopShortcut": true,
+            "createStartMenuShortcut": true,
+            "shortcutName": "KSS KWMS Lite"
+        },
+        "publish": null
     }
 }
