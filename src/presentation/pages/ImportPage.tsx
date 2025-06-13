@@ -1,5 +1,6 @@
 // src/presentation/pages/ImportPage.tsx - Updated to use service layer architecture
 import React, { useState, useRef, useEffect } from 'react';
+import * as XLSX from 'xlsx';
 import {
     Container,
     Typography,
@@ -36,6 +37,8 @@ import {
     AccordionDetails,
     Divider,
     Grid,
+    Menu,
+    MenuItem,
 } from '@mui/material';
 import {
     Upload,
@@ -57,6 +60,8 @@ import {
     Group,
     Inventory,
     Assessment,
+    Download,
+    ArrowDropDown,
 } from '@mui/icons-material';
 import { AndroidDevice } from '@/domain/entities/AndroidDevice';
 import { FileTransferResult } from '@/domain/entities/FileTransferResult';
@@ -114,6 +119,7 @@ export const ImportPage: React.FC<ImportPageProps> = ({ connectedDevice }) => {
     const [importResults, setImportResults] = useState<ImportResult[]>([]);
     const [dataCounts, setDataCounts] = useState<DataCounts | null>(null);
     const [loadingCounts, setLoadingCounts] = useState<boolean>(false);
+    const [templateMenuAnchor, setTemplateMenuAnchor] = useState<HTMLElement | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const androidDeviceService = DIContainer.getInstance().getAndroidDeviceService();
@@ -128,6 +134,66 @@ export const ImportPage: React.FC<ImportPageProps> = ({ connectedDevice }) => {
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         'application/vnd.ms-excel',
     ];
+
+    // Template definitions for different data types
+    const TEMPLATE_DEFINITIONS = {
+        product: {
+            name: 'Product Template',
+            filename: 'product_template.xlsx',
+            sheetName: 'Products',
+            headers: [
+                'jan_code',
+                'product_name',
+                'box_quantity',
+                'supplier_code',
+                'stock_in_alert',
+                'stock_out_alert'
+            ],
+            sampleData: [
+                ['GO20254200001', 'Oneplus 11 64', 5, 'SP20253400001', 5, 20],
+                ['GO20254200002', 'Oneplus 11 128', 5, 'SP20253400001', 5, 20],
+            ]
+        },
+        location: {
+            name: 'Location Template',
+            filename: 'location_template.xlsx',
+            sheetName: 'Locations',
+            headers: [
+                'shop_code',
+                'shop_name'
+            ],
+            sampleData: [
+                ['WH20253400001', 'Kho điện thoại'],
+                ['WH20253400002', 'Kho máy tính'],
+            ]
+        },
+        staff: {
+            name: 'Staff Template',
+            filename: 'staff_template.xlsx',
+            sheetName: 'Staff',
+            headers: [
+                'staff_code',
+                'staff_name'
+            ],
+            sampleData: [
+                ['US00000000001', 'Admin'],
+                ['US00000000002', 'Staff']
+            ]
+        },
+        supplier: {
+            name: 'Supplier Template',
+            filename: 'supplier_template.xlsx',
+            sheetName: 'Suppliers',
+            headers: [
+                'supplier_code',
+                'supplier_name'
+            ],
+            sampleData: [
+                ['SP20253400001', 'KSS 1'],
+                ['SP20253400002', 'KSS 2'],
+            ]
+        }
+    };
 
     useEffect(() => {
         loadImportPath();
@@ -329,6 +395,110 @@ export const ImportPage: React.FC<ImportPageProps> = ({ connectedDevice }) => {
                 detectedFileType: null,
             };
         }
+    };
+
+    const generateExcelContent = (template: any) => {
+        try {
+            // Create a new workbook
+            const workbook = XLSX.utils.book_new();
+            
+            // Prepare data with headers as first row
+            const worksheetData = [template.headers, ...template.sampleData];
+            
+            // Create worksheet from data
+            const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
+            
+            // Auto-size columns based on content
+            const colWidths = template.headers.map((header: string, index: number) => {
+                const headerLength = header.length;
+                const maxDataLength = Math.max(
+                    ...template.sampleData.map((row: any[]) => 
+                        row[index] ? String(row[index]).length : 0
+                    )
+                );
+                return { wch: Math.max(headerLength, maxDataLength, 10) };
+            });
+            worksheet['!cols'] = colWidths;
+            
+            // Style the header row (make it bold)
+            const headerRange = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
+            for (let col = headerRange.s.c; col <= headerRange.e.c; col++) {
+                const cellAddress = XLSX.utils.encode_cell({ r: 0, c: col });
+                if (worksheet[cellAddress]) {
+                    worksheet[cellAddress].s = {
+                        font: { bold: true },
+                        fill: { fgColor: { rgb: "E8F4FD" } },
+                        border: {
+                            top: { style: "thin" },
+                            bottom: { style: "thin" },
+                            left: { style: "thin" },
+                            right: { style: "thin" }
+                        }
+                    };
+                }
+            }
+            
+            // Add worksheet to workbook
+            XLSX.utils.book_append_sheet(workbook, worksheet, template.sheetName);
+            
+            // Generate Excel file buffer
+            const excelBuffer = XLSX.write(workbook, { 
+                bookType: 'xlsx', 
+                type: 'array',
+                cellStyles: true
+            });
+            
+            return new Blob([excelBuffer], { 
+                type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
+            });
+        } catch (error) {
+            console.error('Error generating Excel content:', error);
+            throw error;
+        }
+    };
+
+    const downloadTemplate = (templateType: ImportFileType) => {
+        const template = TEMPLATE_DEFINITIONS[templateType];
+        if (!template) {
+            setError('Template not found for the selected type');
+            return;
+        }
+
+        try {
+            const excelBlob = generateExcelContent(template);
+            const link = document.createElement('a');
+            
+            if (link.download !== undefined) {
+                const url = URL.createObjectURL(excelBlob);
+                link.setAttribute('href', url);
+                link.setAttribute('download', template.filename);
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+                
+                setSuccess(`${template.name} downloaded successfully`);
+            } else {
+                setError('Download not supported in this browser');
+            }
+        } catch (error) {
+            console.error('Failed to download template:', error);
+            setError('Failed to download template file');
+        }
+    };
+
+    const handleTemplateMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
+        setTemplateMenuAnchor(event.currentTarget);
+    };
+
+    const handleTemplateMenuClose = () => {
+        setTemplateMenuAnchor(null);
+    };
+
+    const handleTemplateDownload = (templateType: ImportFileType) => {
+        downloadTemplate(templateType);
+        handleTemplateMenuClose();
     };
 
     const handleFileSelect = () => {
@@ -962,6 +1132,16 @@ export const ImportPage: React.FC<ImportPageProps> = ({ connectedDevice }) => {
 
                                 <Box display="flex" gap={2} flexWrap="wrap">
                                     <Button
+                                        variant="outlined"
+                                        startIcon={<Download />}
+                                        endIcon={<ArrowDropDown />}
+                                        onClick={handleTemplateMenuOpen}
+                                        disabled={transferring || importing}
+                                    >
+                                        Download Template
+                                    </Button>
+
+                                    <Button
                                         variant="contained"
                                         startIcon={<Upload />}
                                         onClick={handleFileSelect}
@@ -1318,6 +1498,58 @@ export const ImportPage: React.FC<ImportPageProps> = ({ connectedDevice }) => {
                     />
                 </Box>
             </Container>
+
+            {/* Template Download Menu */}
+            <Menu
+                anchorEl={templateMenuAnchor}
+                open={Boolean(templateMenuAnchor)}
+                onClose={handleTemplateMenuClose}
+                anchorOrigin={{
+                    vertical: 'bottom',
+                    horizontal: 'left',
+                }}
+                transformOrigin={{
+                    vertical: 'top',
+                    horizontal: 'left',
+                }}
+            >
+                <MenuItem onClick={() => handleTemplateDownload('product')}>
+                    <ListItemIcon>
+                        <Inventory fontSize="small" />
+                    </ListItemIcon>
+                    <ListItemText 
+                        primary="Product Template" 
+                        secondary="Excel template for product data import"
+                    />
+                </MenuItem>
+                <MenuItem onClick={() => handleTemplateDownload('location')}>
+                    <ListItemIcon>
+                        <Business fontSize="small" />
+                    </ListItemIcon>
+                    <ListItemText 
+                        primary="Location Template" 
+                        secondary="Excel template for location data import"
+                    />
+                </MenuItem>
+                <MenuItem onClick={() => handleTemplateDownload('staff')}>
+                    <ListItemIcon>
+                        <Group fontSize="small" />
+                    </ListItemIcon>
+                    <ListItemText 
+                        primary="Staff Template" 
+                        secondary="Excel template for staff data import"
+                    />
+                </MenuItem>
+                <MenuItem onClick={() => handleTemplateDownload('supplier')}>
+                    <ListItemIcon>
+                        <Assignment fontSize="small" />
+                    </ListItemIcon>
+                    <ListItemText 
+                        primary="Supplier Template" 
+                        secondary="Excel template for supplier data import"
+                    />
+                </MenuItem>
+            </Menu>
 
             {/* Error Snackbar */}
             <Snackbar
