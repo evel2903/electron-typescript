@@ -1,4 +1,4 @@
-// src/presentation/components/Header.tsx - Updated with Reports tab
+// src/presentation/components/Header.tsx - Updated with QR Code tab
 import React, { useState } from 'react';
 import {
     AppBar,
@@ -166,6 +166,7 @@ export const Header: React.FC<HeaderProps> = ({
                     >
                         <Tab label="Product Status" />
                         <Tab label="Reports" />
+                        <Tab label="QR Codes" />
                         <Tab label="Get Data" />
                         <Tab label="Import Files" />
                         <Tab label="Settings" />

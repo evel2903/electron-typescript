@@ -1,4 +1,4 @@
-// src/presentation/pages/HomePage.tsx - Updated with ProductStatusPage
+// src/presentation/pages/HomePage.tsx - Updated with QRCodePage
 import React, { useState, useEffect } from 'react';
 import { Box } from '@mui/material';
 import { Header } from '../components/Header';
@@ -6,6 +6,7 @@ import { ImportPage } from './ImportPage';
 import { GetDataPage } from './GetDataPage';
 import { ReportsPage } from './ReportsPage';
 import { ProductStatusPage } from './ProductStatusPage';
+import { QRCodePage } from './QRCodePage';
 import { SettingsPage } from './SettingsPage';
 import { DIContainer } from '@/application/services/DIContainer';
 import { AndroidDevice } from '@/domain/entities/AndroidDevice';
@@ -43,10 +44,12 @@ export const HomePage: React.FC = () => {
             case 1:
                 return <ReportsPage />;
             case 2:
-                return <GetDataPage connectedDevice={selectedDevice} />;
+                return <QRCodePage />;
             case 3:
-                return <ImportPage connectedDevice={selectedDevice} />;
+                return <GetDataPage connectedDevice={selectedDevice} />;
             case 4:
+                return <ImportPage connectedDevice={selectedDevice} />;
+            case 5:
                 return <SettingsPage />;
             default:
                 return <ProductStatusPage />;
