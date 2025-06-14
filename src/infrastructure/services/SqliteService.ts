@@ -33,6 +33,34 @@ export class SqliteService {
         return dbPath;
     }
 
+    private async copyTemplateDatabaseIfNeeded(): Promise<void> {
+        const isDev = process.env.NODE_ENV === 'development';
+        if (isDev) return;
+
+        try {
+            // Check if database already exists
+            if (fs.existsSync(this.dbPath)) {
+                this.logger.info('Database already exists, skipping template copy');
+                return;
+            }
+
+            // Get the template database path from the app resources
+            const templatePath = path.join(process.resourcesPath, 'app.db');
+            
+            if (!fs.existsSync(templatePath)) {
+                this.logger.info('No template database found, will create new database');
+                return;
+            }
+
+            // Copy template database to installation directory
+            fs.copyFileSync(templatePath, this.dbPath);
+            this.logger.info('Template database copied successfully');
+        } catch (error) {
+            this.logger.error('Error copying template database:', error as Error);
+            throw error;
+        }
+    }
+
     async connect(): Promise<boolean> {
         try {
             // Ensure the directory exists
@@ -40,6 +68,9 @@ export class SqliteService {
             if (!fs.existsSync(dbDir)) {
                 fs.mkdirSync(dbDir, { recursive: true });
             }
+
+            // Copy template database if needed
+            await this.copyTemplateDatabaseIfNeeded();
 
             this.db = new Database(this.dbPath);
             this.logger.info('Connected to SQLite database successfully');

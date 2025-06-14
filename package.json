@@ -65,7 +65,6 @@
             "index.html",
             "package.json",
             "node_modules/better-sqlite3/**/*",
-            "app.db",
             "!src/**/*",
             "!*.ts",
             "!*.md"
@@ -74,6 +73,10 @@
             {
                 "from": "tools/",
                 "to": "tools/"
+            },
+            {
+                "from": "app.db",
+                "to": "app.db"
             }
         ],
         "win": {
