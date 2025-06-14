@@ -33,6 +33,155 @@ export class SqliteService {
         return dbPath;
     }
 
+    private createTemplateDatabase(templatePath: string): void {
+        try {
+            // Remove existing template if it exists
+            if (fs.existsSync(templatePath)) {
+                fs.unlinkSync(templatePath);
+            }
+
+            const db = new Database(templatePath);
+
+            // Create schema
+            db.exec(`
+                -- Settings table
+                CREATE TABLE IF NOT EXISTS sys_setting (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                );
+
+                -- Product table
+                CREATE TABLE IF NOT EXISTS product (
+                    jan_code TEXT PRIMARY KEY,
+                    product_name TEXT NOT NULL,
+                    box_quantity INTEGER DEFAULT 0,
+                    supplier_code TEXT,
+                    stock_in_alert INTEGER DEFAULT 0,
+                    stock_out_alert INTEGER DEFAULT 0,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                );
+
+                -- Location table
+                CREATE TABLE IF NOT EXISTS location (
+                    shop_code TEXT PRIMARY KEY,
+                    shop_name TEXT NOT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                );
+
+                -- Staff table
+                CREATE TABLE IF NOT EXISTS staff (
+                    staff_code TEXT PRIMARY KEY,
+                    staff_name TEXT NOT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                );
+
+                -- Supplier table
+                CREATE TABLE IF NOT EXISTS supplier (
+                    supplier_code TEXT PRIMARY KEY,
+                    supplier_name TEXT NOT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                );
+
+                -- Inventory Data table
+                CREATE TABLE IF NOT EXISTS inventory_data (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    input_date TEXT,
+                    staff_code TEXT NOT NULL,
+                    shop_code TEXT NOT NULL,
+                    shelf_number INTEGER NOT NULL,
+                    shelf_position INTEGER NOT NULL,
+                    jan_code TEXT,
+                    quantity INTEGER NOT NULL,
+                    cost REAL NOT NULL,
+                    price INTEGER NOT NULL,
+                    system_quantity INTEGER NOT NULL,
+                    quantity_discrepancy INTEGER NOT NULL,
+                    note TEXT NOT NULL,
+                    update_date TEXT,
+                    update_time TEXT,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                );
+
+                -- Stockin Data table
+                CREATE TABLE IF NOT EXISTS stockin_data (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    input_date TEXT NOT NULL,
+                    staff_code TEXT NOT NULL,
+                    shop_code TEXT NOT NULL,
+                    jan_code TEXT NOT NULL,
+                    quantity INTEGER NOT NULL,
+                    cost REAL NOT NULL,
+                    price INTEGER NOT NULL,
+                    note TEXT NOT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                );
+
+                -- Create triggers for updated_at
+                CREATE TRIGGER IF NOT EXISTS sys_setting_updated_at 
+                AFTER UPDATE ON sys_setting
+                BEGIN
+                    UPDATE sys_setting SET updated_at = CURRENT_TIMESTAMP WHERE key = NEW.key;
+                END;
+
+                CREATE TRIGGER IF NOT EXISTS product_updated_at 
+                AFTER UPDATE ON product
+                BEGIN
+                    UPDATE product SET updated_at = CURRENT_TIMESTAMP WHERE jan_code = NEW.jan_code;
+                END;
+
+                CREATE TRIGGER IF NOT EXISTS location_updated_at 
+                AFTER UPDATE ON location
+                BEGIN
+                    UPDATE location SET updated_at = CURRENT_TIMESTAMP WHERE shop_code = NEW.shop_code;
+                END;
+
+                CREATE TRIGGER IF NOT EXISTS staff_updated_at 
+                AFTER UPDATE ON staff
+                BEGIN
+                    UPDATE staff SET updated_at = CURRENT_TIMESTAMP WHERE staff_code = NEW.staff_code;
+                END;
+
+                CREATE TRIGGER IF NOT EXISTS supplier_updated_at 
+                AFTER UPDATE ON supplier
+                BEGIN
+                    UPDATE supplier SET updated_at = CURRENT_TIMESTAMP WHERE supplier_code = NEW.supplier_code;
+                END;
+
+                CREATE TRIGGER IF NOT EXISTS inventory_data_updated_at 
+                AFTER UPDATE ON inventory_data
+                BEGIN
+                    UPDATE inventory_data SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+                END;
+
+                CREATE TRIGGER IF NOT EXISTS stockin_data_updated_at 
+                AFTER UPDATE ON stockin_data
+                BEGIN
+                    UPDATE stockin_data SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+                END;
+            `);
+
+            // Add any initial required settings
+            db.prepare(`
+                INSERT OR IGNORE INTO sys_setting (key, value) 
+                VALUES ('database_version', '1.0.0')
+            `).run();
+
+            db.close();
+            this.logger.info('Template database created successfully at:', templatePath);
+        } catch (error) {
+            this.logger.error('Error creating template database:', error as Error);
+            throw error;
+        }
+    }
+
     private async copyTemplateDatabaseIfNeeded(): Promise<void> {
         const isDev = process.env.NODE_ENV === 'development';
         if (isDev) return;
@@ -48,7 +197,8 @@ export class SqliteService {
             const templatePath = path.join(process.resourcesPath, 'app.db');
             
             if (!fs.existsSync(templatePath)) {
-                this.logger.info('No template database found, will create new database');
+                this.logger.info('No template database found, creating new database');
+                this.createTemplateDatabase(this.dbPath);
                 return;
             }
 

@@ -75,7 +75,7 @@
                 "to": "tools/"
             },
             {
-                "from": "app.db",
+                "from": "template.db",
                 "to": "app.db"
             }
         ],
