@@ -51,6 +51,7 @@ import { Staff } from '@/domain/entities/Staff';
 import { Supplier } from '@/domain/entities/Supplier';
 import { RendererDataService } from '@/application/services/DIContainer';
 import QRCodeSVG from 'react-qr-code';
+import { createRoot } from 'react-dom/client';
 
 type EntityType = 'product' | 'supplier' | 'staff' | 'shop';
 
@@ -205,115 +206,221 @@ export const QRCodePage: React.FC = () => {
         setPreviewDialogOpen(false);
     };
 
-    const handlePrint = () => {
+    // Helper function to generate QR code as data URL
+    const generateQRCodeDataURL = (text: string, size: number = 150): Promise<string> => {
+        return new Promise((resolve, reject) => {
+            const tempDiv = document.createElement('div');
+            tempDiv.style.position = 'absolute';
+            tempDiv.style.left = '-9999px';
+            tempDiv.style.visibility = 'hidden';
+            document.body.appendChild(tempDiv);
+
+            const root = createRoot(tempDiv);
+            
+            // Create a container for the SVG
+            const svgContainer = document.createElement('div');
+            tempDiv.appendChild(svgContainer);
+            
+            root.render(
+                React.createElement(QRCodeSVG, {
+                    value: text,
+                    size: size
+                })
+            );
+
+            // Wait for render and extract SVG
+            setTimeout(() => {
+                try {
+                    const svg = tempDiv.querySelector('svg');
+                    if (svg) {
+                        const svgData = new XMLSerializer().serializeToString(svg);
+                        const canvas = document.createElement('canvas');
+                        canvas.width = size;
+                        canvas.height = size;
+                        const ctx = canvas.getContext('2d');
+                        
+                        if (ctx) {
+                            const img = new Image();
+                            
+                            img.onload = () => {
+                                ctx.drawImage(img, 0, 0);
+                                const dataURL = canvas.toDataURL('image/png');
+                                root.unmount();
+                                document.body.removeChild(tempDiv);
+                                resolve(dataURL);
+                            };
+                            
+                            img.onerror = () => {
+                                root.unmount();
+                                document.body.removeChild(tempDiv);
+                                reject(new Error('Failed to load QR code image'));
+                            };
+                            
+                            const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+                            const url = URL.createObjectURL(svgBlob);
+                            img.src = url;
+                        } else {
+                            root.unmount();
+                            document.body.removeChild(tempDiv);
+                            reject(new Error('Failed to get canvas context'));
+                        }
+                    } else {
+                        root.unmount();
+                        document.body.removeChild(tempDiv);
+                        reject(new Error('SVG element not found'));
+                    }
+                } catch (error) {
+                    root.unmount();
+                    document.body.removeChild(tempDiv);
+                    reject(error);
+                }
+            }, 200);
+        });
+    };
+
+    const handlePrint = async () => {
         if (qrItems.filter(item => selectedItems.has(item.id)).length === 0) {
             setError('No QR codes to print');
             return;
         }
 
-        // Create a new window for printing
-        const printWindow = window.open('', '_blank');
-        if (!printWindow) {
-            setError('Unable to open print window. Please check your browser settings.');
-            return;
-        }
+        setGenerating(true);
 
-        // Generate HTML content for printing
-        const printContent = `
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <title>QR Code Print - ${selectedEntity.charAt(0).toUpperCase() + selectedEntity.slice(1)}</title>
-                <style>
-                    body {
-                        font-family: Arial, sans-serif;
-                        margin: 20px;
-                        background: white;
-                    }
-                    .header {
-                        text-align: center;
-                        margin-bottom: 20px;
-                        border-bottom: 2px solid #333;
-                        padding-bottom: 10px;
-                    }
-                    .qr-grid {
-                        display: grid;
-                        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-                        gap: 20px;
-                        margin-top: 20px;
-                    }
-                    .qr-item {
-                        border: 1px solid #ddd;
-                        padding: 15px;
-                        text-align: center;
-                        border-radius: 8px;
-                        background: #f9f9f9;
-                        page-break-inside: avoid;
-                    }
-                    .qr-code {
-                        margin-bottom: 10px;
-                    }
-                    .qr-code img {
-                        max-width: 150px;
-                        height: auto;
-                    }
-                    .qr-info {
-                        margin-top: 10px;
-                    }
-                    .qr-code-text {
-                        font-size: 14px;
-                        font-weight: bold;
-                        color: #333;
-                        margin-bottom: 5px;
-                    }
-                    .qr-name {
-                        font-size: 12px;
-                        color: #666;
-                        word-wrap: break-word;
-                    }
-                    @media print {
+        try {
+            const selectedQRItems = qrItems.filter(item => selectedItems.has(item.id));
+            
+            // Generate QR code data URLs
+            const qrDataURLs: { [key: string]: string } = {};
+            
+            for (const item of selectedQRItems) {
+                try {
+                    const dataURL = await generateQRCodeDataURL(`${item.code},${item.name}`, 150);
+                    qrDataURLs[item.id] = dataURL;
+                } catch (error) {
+                    console.error(`Failed to generate QR code for ${item.code}:`, error);
+                    qrDataURLs[item.id] = ''; // Use empty string as fallback
+                }
+            }
+
+            // Create print window
+            const printWindow = window.open('', '_blank');
+            if (!printWindow) {
+                setError('Unable to open print window. Please check your browser settings.');
+                return;
+            }
+
+            // Generate HTML content with QR code images
+            const printContent = `
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>QR Code Print - ${selectedEntity.charAt(0).toUpperCase() + selectedEntity.slice(1)}</title>
+                    <style>
                         body {
-                            margin: 0;
+                            font-family: Arial, sans-serif;
+                            margin: 20px;
+                            background: white;
+                        }
+                        .header {
+                            text-align: center;
+                            margin-bottom: 20px;
+                            border-bottom: 2px solid #333;
+                            padding-bottom: 10px;
                         }
                         .qr-grid {
-                            grid-template-columns: repeat(3, 1fr);
+                            display: grid;
+                            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+                            gap: 20px;
+                            margin-top: 20px;
                         }
-                    }
-                </style>
-            </head>
-            <body>
-                <div class="header">
-                    <h1>QR Code Print Sheet</h1>
-                    <p>Entity Type: ${selectedEntity.charAt(0).toUpperCase() + selectedEntity.slice(1)} | Total Items: ${qrItems.filter(item => selectedItems.has(item.id)).length} | Generated: ${new Date().toLocaleString()}</p>
-                </div>
-                
-                <div class="qr-grid">
-                    ${qrItems.filter(item => selectedItems.has(item.id)).map(item => `
-                        <div class="qr-item">
-                            <div class="qr-code">
-                                <QRCodeSVG value="${item.code},${item.name}" size={150} />
+                        .qr-item {
+                            border: 1px solid #ddd;
+                            padding: 15px;
+                            text-align: center;
+                            border-radius: 8px;
+                            background: #f9f9f9;
+                            page-break-inside: avoid;
+                        }
+                        .qr-code {
+                            margin-bottom: 10px;
+                        }
+                        .qr-code img {
+                            max-width: 150px;
+                            height: 150px;
+                            border: 1px solid #ccc;
+                        }
+                        .qr-info {
+                            margin-top: 10px;
+                        }
+                        .qr-code-text {
+                            font-size: 14px;
+                            font-weight: bold;
+                            color: #333;
+                            margin-bottom: 5px;
+                        }
+                        .qr-name {
+                            font-size: 12px;
+                            color: #666;
+                            word-wrap: break-word;
+                        }
+                        .error-message {
+                            color: #f44336;
+                            font-size: 12px;
+                            font-style: italic;
+                        }
+                        @media print {
+                            body {
+                                margin: 0;
+                            }
+                            .qr-grid {
+                                grid-template-columns: repeat(3, 1fr);
+                            }
+                        }
+                    </style>
+                </head>
+                <body>
+                    <div class="header">
+                        <h1>QR Code Print Sheet</h1>
+                        <p>Entity Type: ${selectedEntity.charAt(0).toUpperCase() + selectedEntity.slice(1)} | Total Items: ${selectedQRItems.length} | Generated: ${new Date().toLocaleString()}</p>
+                    </div>
+                    
+                    <div class="qr-grid">
+                        ${selectedQRItems.map(item => `
+                            <div class="qr-item">
+                                <div class="qr-code">
+                                    ${qrDataURLs[item.id] 
+                                        ? `<img src="${qrDataURLs[item.id]}" alt="QR Code for ${item.code}" />` 
+                                        : '<div class="error-message">QR Code generation failed</div>'
+                                    }
+                                </div>
+                                <div class="qr-info">
+                                    <div class="qr-code-text">${item.code}</div>
+                                    <div class="qr-name">${item.name}</div>
+                                </div>
                             </div>
-                            <div class="qr-info">
-                                <div class="qr-code-text">${item.code}</div>
-                                <div class="qr-name">${item.name}</div>
-                            </div>
-                        </div>
-                    `).join('')}
-                </div>
-            </body>
-            </html>
-        `;
+                        `).join('')}
+                    </div>
+                </body>
+                </html>
+            `;
 
-        printWindow.document.write(printContent);
-        printWindow.document.close();
+            printWindow.document.write(printContent);
+            printWindow.document.close();
 
-        // Wait for images to load before printing
-        setTimeout(() => {
-            printWindow.print();
-            printWindow.close();
-            setSuccess(`Successfully printed ${qrItems.filter(item => selectedItems.has(item.id)).length} QR codes`);
-            setPreviewDialogOpen(false);
-        }, 1000);
+            // Print after content loads
+            setTimeout(() => {
+                printWindow.print();
+                printWindow.close();
+                setSuccess(`Successfully printed ${selectedQRItems.length} QR codes`);
+                setPreviewDialogOpen(false);
+            }, 1500);
+
+        } catch (error) {
+            setError('Failed to generate QR codes for printing');
+            console.error('Print error:', error);
+        } finally {
+            setGenerating(false);
+        }
     };
 
     const getEntityIcon = (entity: EntityType) => {
@@ -645,8 +752,9 @@ export const QRCodePage: React.FC = () => {
                         onClick={handlePrint} 
                         variant="contained" 
                         startIcon={<Print />}
+                        disabled={generating}
                     >
-                        Print QR Codes
+                        {generating ? 'Generating...' : 'Print QR Codes'}
                     </Button>
                 </DialogActions>
             </Dialog>
