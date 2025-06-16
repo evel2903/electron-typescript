@@ -291,7 +291,7 @@ export const QRCodePage: React.FC = () => {
                     ${qrItems.filter(item => selectedItems.has(item.id)).map(item => `
                         <div class="qr-item">
                             <div class="qr-code">
-                                <QRCodeSVG value="${item.code} - ${item.name}" size={150} />
+                                <QRCodeSVG value="${item.code},${item.name}" size={150} />
                             </div>
                             <div class="qr-info">
                                 <div class="qr-code-text">${item.code}</div>
@@ -623,7 +623,7 @@ export const QRCodePage: React.FC = () => {
                             <Grid item xs={12} sm={6} md={4} key={item.id}>
                                 <Card sx={{ m: 1, width: 220, display: 'inline-block', verticalAlign: 'top' }}>
                                     <CardContent sx={{ textAlign: 'center' }}>
-                                        <QRCodeSVG value={item.code + ' - ' + item.name} size={128} />
+                                        <QRCodeSVG value={item.code + ',' + item.name} size={128} />
                                         <Typography variant="subtitle2" sx={{ mt: 1 }}>
                                             QR Code for
                                         </Typography>
