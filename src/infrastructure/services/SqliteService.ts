@@ -76,39 +76,21 @@ export class SqliteService {
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
             );
 
+            
             -- Inventory Data table
-            CREATE TABLE IF NOT EXISTS inventory_data (
-                id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-                input_date TEXT,
-                staff_code TEXT NOT NULL,
-                shop_code TEXT NOT NULL,
-                shelf_number INTEGER NOT NULL,
-                shelf_position INTEGER NOT NULL,
-                jan_code TEXT,
-                quantity INTEGER NOT NULL,
-                cost REAL NOT NULL,
-                price INTEGER NOT NULL,
-                system_quantity INTEGER NOT NULL,
-                quantity_discrepancy INTEGER NOT NULL,
-                note TEXT NOT NULL,
-                update_date TEXT,
-                update_time TEXT,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-            );
+            CREATE TABLE IF NOT EXISTS inventory_data (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, input_date TEXT, staff_code TEXT NOT NULL, shop_code TEXT NOT NULL, shelf_number INTEGER NOT NULL, shelf_position INTEGER NOT NULL, jan_code TEXT, quantity INTEGER NOT NULL, cost REAL NOT NULL, price INTEGER NOT NULL, system_quantity INTEGER NOT NULL, quantity_discrepancy INTEGER NOT NULL, note TEXT NOT NULL, update_date TEXT, update_time TEXT
+            ,created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP);
+            
 
             -- Stockin Data table
-            CREATE TABLE IF NOT EXISTS stockin_data (
-                id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-                input_date TEXT NOT NULL,
-                staff_code TEXT NOT NULL,
-                shop_code TEXT NOT NULL,
-                jan_code TEXT NOT NULL,
-                quantity INTEGER NOT NULL,
-                cost REAL NOT NULL,
-                price INTEGER NOT NULL,
-                note TEXT NOT NULL,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            CREATE TABLE IF NOT EXISTS stockin_data (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, input_date TEXT NOT NULL, supplier_code TEXT, supplier_name TEXT, slip_number TEXT NOT NULL, location TEXT NOT NULL, shelf_no INTEGER NOT NULL, shelf_position INTEGER NOT NULL, product_code TEXT NOT NULL, quantity INTEGER NOT NULL, staff_code TEXT NOT NULL, shop_code TEXT NOT NULL, note TEXT NOT NULL, update_date TEXT, update_time TEXT, ignore_trigger INTEGER NOT NULL
+            ,created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP);
+
+            -- Stockout Data table
+            CREATE TABLE IF NOT EXISTS stockout_data (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, input_date TEXT NOT NULL, supplier_code TEXT NOT NULL, slip_number TEXT NOT NULL, location TEXT NOT NULL, shelf_no INTEGER NOT NULL, shelf_position INTEGER NOT NULL, product_code TEXT NOT NULL, quantity INTEGER NOT NULL, staff_code TEXT NOT NULL, shop_code TEXT NOT NULL, note TEXT NOT NULL, update_date TEXT, update_time TEXT, dept_code TEXT NOT NULL, dept_name TEXT NOT NULL, ignore_trigger INTEGER NOT NULL
+                ,created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
             );
 
@@ -153,6 +135,12 @@ export class SqliteService {
             AFTER UPDATE ON stockin_data
             BEGIN
                 UPDATE stockin_data SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+            END;
+
+            CREATE TRIGGER IF NOT EXISTS stockout_data_updated_at 
+            AFTER UPDATE ON stockout_data
+            BEGIN
+                UPDATE stockout_data SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
             END;
         `;
     }
@@ -305,11 +293,12 @@ export class SqliteService {
                 throw new Error('Database not connected');
             }
 
-            // Check database version for migrations
+            // 1. Initialize schema first (create tables if missing)
+            await this.initializeDatabase(this.db);
+
+            // 2. Then run migrations
             await this.runMigrations();
 
-            // Initialize schema
-            await this.initializeDatabase(this.db);
             return true;
         } catch (error) {
             this.logger.error('Failed to initialize schema:', error as Error);

@@ -109,18 +109,20 @@ export const GetDataPage: React.FC<GetDataPageProps> = ({ connectedDevice }) => 
 
     const handleConfirmSync = async () => {
         setConfirmDialogOpen(false);
-
+    
         if (!connectedDevice) {
             setError('No device connected. Please connect an Android device first.');
             return;
         }
-
+    
         setSyncing(true);
         setError(null);
         setSuccess(null);
         setSyncResults([]);
         setSyncProgress(null);
-
+    
+        const createdTempFiles: string[] = [];
+    
         try {
             const results = await window.electronAPI.dataSync.syncFromDevice(
                 connectedDevice.id,
@@ -129,9 +131,9 @@ export const GetDataPage: React.FC<GetDataPageProps> = ({ connectedDevice }) => 
                     setSyncProgress(progress);
                 },
             );
-
+    
             setSyncResults(results);
-
+    
             const totalRecordsInserted = results.reduce(
                 (sum, result) => sum + result.recordsInserted,
                 0,
@@ -142,12 +144,56 @@ export const GetDataPage: React.FC<GetDataPageProps> = ({ connectedDevice }) => 
             );
             const failedTables = results.filter((result) => !result.success);
             const productMstResult = results.find((result) => result.tableName === 'product_mst');
-
+    
             if (failedTables.length === 0) {
                 let successMessage = `Data synchronization completed successfully! ${totalRecordsInserted} records inserted, ${totalRecordsUpdated} records updated.`;
                 if (productMstResult && productMstResult.success) {
                     successMessage += ` Product box quantities synchronized from product master data.`;
                 }
+    
+                // Create interface file after successful sync
+                try {
+                    const interfaceContent = '{clearData:true,importFlg:false}';
+                    const interfaceFileName = 'interface.txt';
+    
+                    const interfaceBlob = new Blob([interfaceContent], { type: 'text/plain' });
+                    const interfaceFile = new File([interfaceBlob], interfaceFileName, {
+                        type: 'text/plain',
+                    });
+    
+                    // Helper function to create temporary file (similar to ImportPage)
+                    const createTemporaryFile = async (file: File): Promise<string> => {
+                        try {
+                            const arrayBuffer = await file.arrayBuffer();
+                            const tempPath = await window.electronAPI.fs.writeTemporaryFile(file.name, arrayBuffer);
+                            console.log(`Temporary file created at: ${tempPath}`);
+                            return tempPath;
+                        } catch (error) {
+                            console.error('Failed to create temporary file:', error);
+                            throw new Error(
+                                `Failed to create temporary file for ${file.name}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+                            );
+                        }
+                    };
+    
+                    const interfaceTempPath = await createTemporaryFile(interfaceFile);
+                    createdTempFiles.push(interfaceTempPath);
+    
+                    const androidDeviceService = DIContainer.getInstance().getAndroidDeviceService();
+                    await androidDeviceService.uploadFile(
+                        connectedDevice.id,
+                        interfaceTempPath,
+                        `${importPath}/Interface/${interfaceFileName}`,
+                    );
+    
+                    console.log('Interface file created successfully after data sync');
+                    successMessage += ' Interface file updated on device.';
+                } catch (interfaceError) {
+                    console.error('Failed to create interface file:', interfaceError);
+                    // Don't fail the entire operation if interface file creation fails
+                    successMessage += ' (Note: Interface file could not be updated on device)';
+                }
+    
                 setSuccess(successMessage);
             } else {
                 setError(
@@ -157,6 +203,20 @@ export const GetDataPage: React.FC<GetDataPageProps> = ({ connectedDevice }) => 
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Failed to synchronize data from device');
         } finally {
+            // Clean up any created temporary files
+            for (const tempPath of createdTempFiles) {
+                try {
+                    const success = await window.electronAPI.fs.cleanupTemporaryFile(tempPath);
+                    if (success) {
+                        console.log(`Temporary file cleaned up: ${tempPath}`);
+                    } else {
+                        console.warn(`Failed to cleanup temporary file: ${tempPath}`);
+                    }
+                } catch (error) {
+                    console.error('Failed to cleanup temporary file:', error);
+                }
+            }
+    
             setSyncing(false);
             setTimeout(() => {
                 setSyncProgress(null);
